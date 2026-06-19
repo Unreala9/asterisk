@@ -15,6 +15,7 @@ from app.api.v1 import (
     phone_numbers,
     scheduled_tasks,
     voice_ws,
+    sip_trunks,
 )
 
 
@@ -67,6 +68,9 @@ app.include_router(local_agent.router, prefix="/api/v1", tags=["local-agent"])
 app.include_router(local_agent.test_router, prefix="/api/test", tags=["test"])
 app.include_router(
     phone_numbers.router, prefix="/api/v1/workspaces", tags=["phone-numbers"]
+)
+app.include_router(
+    sip_trunks.router, prefix="/api/v1/workspaces", tags=["sip-trunks"]
 )
 app.include_router(
     scheduled_tasks.router, prefix="/api/v1/scheduled-tasks", tags=["scheduled-tasks"]

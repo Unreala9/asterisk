@@ -34,6 +34,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedDashboardWorkflowsRouteImport } from './routes/_authenticated/dashboard/workflows'
+import { Route as AuthenticatedDashboardSipTrunksRouteImport } from './routes/_authenticated/dashboard/sip-trunks'
 import { Route as AuthenticatedDashboardSettingsRouteImport } from './routes/_authenticated/dashboard/settings'
 import { Route as AuthenticatedDashboardSchedulesRouteImport } from './routes/_authenticated/dashboard/schedules'
 import { Route as AuthenticatedDashboardQaRouteImport } from './routes/_authenticated/dashboard/qa'
@@ -42,6 +43,7 @@ import { Route as AuthenticatedDashboardPhoneNumbersRouteImport } from './routes
 import { Route as AuthenticatedDashboardOutboundRouteImport } from './routes/_authenticated/dashboard/outbound'
 import { Route as AuthenticatedDashboardKnowledgeBaseRouteImport } from './routes/_authenticated/dashboard/knowledge-base'
 import { Route as AuthenticatedDashboardIntegrationsRouteImport } from './routes/_authenticated/dashboard/integrations'
+import { Route as AuthenticatedDashboardDidNumbersRouteImport } from './routes/_authenticated/dashboard/did-numbers'
 import { Route as AuthenticatedDashboardChatHistoryRouteImport } from './routes/_authenticated/dashboard/chat-history'
 import { Route as AuthenticatedDashboardCallsRouteImport } from './routes/_authenticated/dashboard/calls'
 import { Route as AuthenticatedDashboardBillingRouteImport } from './routes/_authenticated/dashboard/billing'
@@ -179,6 +181,12 @@ const AuthenticatedDashboardWorkflowsRoute =
     path: '/dashboard/workflows',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedDashboardSipTrunksRoute =
+  AuthenticatedDashboardSipTrunksRouteImport.update({
+    id: '/dashboard/sip-trunks',
+    path: '/dashboard/sip-trunks',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedDashboardSettingsRoute =
   AuthenticatedDashboardSettingsRouteImport.update({
     id: '/dashboard/settings',
@@ -225,6 +233,12 @@ const AuthenticatedDashboardIntegrationsRoute =
   AuthenticatedDashboardIntegrationsRouteImport.update({
     id: '/dashboard/integrations',
     path: '/dashboard/integrations',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedDashboardDidNumbersRoute =
+  AuthenticatedDashboardDidNumbersRouteImport.update({
+    id: '/dashboard/did-numbers',
+    path: '/dashboard/did-numbers',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedDashboardChatHistoryRoute =
@@ -317,6 +331,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/billing': typeof AuthenticatedDashboardBillingRoute
   '/dashboard/calls': typeof AuthenticatedDashboardCallsRouteWithChildren
   '/dashboard/chat-history': typeof AuthenticatedDashboardChatHistoryRoute
+  '/dashboard/did-numbers': typeof AuthenticatedDashboardDidNumbersRoute
   '/dashboard/integrations': typeof AuthenticatedDashboardIntegrationsRoute
   '/dashboard/knowledge-base': typeof AuthenticatedDashboardKnowledgeBaseRoute
   '/dashboard/outbound': typeof AuthenticatedDashboardOutboundRoute
@@ -325,6 +340,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/qa': typeof AuthenticatedDashboardQaRoute
   '/dashboard/schedules': typeof AuthenticatedDashboardSchedulesRouteWithChildren
   '/dashboard/settings': typeof AuthenticatedDashboardSettingsRoute
+  '/dashboard/sip-trunks': typeof AuthenticatedDashboardSipTrunksRoute
   '/dashboard/workflows': typeof AuthenticatedDashboardWorkflowsRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/dashboard/agents/new': typeof AuthenticatedDashboardAgentsNewRoute
@@ -361,6 +377,7 @@ export interface FileRoutesByTo {
   '/dashboard/billing': typeof AuthenticatedDashboardBillingRoute
   '/dashboard/calls': typeof AuthenticatedDashboardCallsRouteWithChildren
   '/dashboard/chat-history': typeof AuthenticatedDashboardChatHistoryRoute
+  '/dashboard/did-numbers': typeof AuthenticatedDashboardDidNumbersRoute
   '/dashboard/integrations': typeof AuthenticatedDashboardIntegrationsRoute
   '/dashboard/knowledge-base': typeof AuthenticatedDashboardKnowledgeBaseRoute
   '/dashboard/outbound': typeof AuthenticatedDashboardOutboundRoute
@@ -369,6 +386,7 @@ export interface FileRoutesByTo {
   '/dashboard/qa': typeof AuthenticatedDashboardQaRoute
   '/dashboard/schedules': typeof AuthenticatedDashboardSchedulesRouteWithChildren
   '/dashboard/settings': typeof AuthenticatedDashboardSettingsRoute
+  '/dashboard/sip-trunks': typeof AuthenticatedDashboardSipTrunksRoute
   '/dashboard/workflows': typeof AuthenticatedDashboardWorkflowsRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/dashboard/agents/new': typeof AuthenticatedDashboardAgentsNewRoute
@@ -407,6 +425,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/billing': typeof AuthenticatedDashboardBillingRoute
   '/_authenticated/dashboard/calls': typeof AuthenticatedDashboardCallsRouteWithChildren
   '/_authenticated/dashboard/chat-history': typeof AuthenticatedDashboardChatHistoryRoute
+  '/_authenticated/dashboard/did-numbers': typeof AuthenticatedDashboardDidNumbersRoute
   '/_authenticated/dashboard/integrations': typeof AuthenticatedDashboardIntegrationsRoute
   '/_authenticated/dashboard/knowledge-base': typeof AuthenticatedDashboardKnowledgeBaseRoute
   '/_authenticated/dashboard/outbound': typeof AuthenticatedDashboardOutboundRoute
@@ -415,6 +434,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/qa': typeof AuthenticatedDashboardQaRoute
   '/_authenticated/dashboard/schedules': typeof AuthenticatedDashboardSchedulesRouteWithChildren
   '/_authenticated/dashboard/settings': typeof AuthenticatedDashboardSettingsRoute
+  '/_authenticated/dashboard/sip-trunks': typeof AuthenticatedDashboardSipTrunksRoute
   '/_authenticated/dashboard/workflows': typeof AuthenticatedDashboardWorkflowsRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/dashboard/agents/new': typeof AuthenticatedDashboardAgentsNewRoute
@@ -453,6 +473,7 @@ export interface FileRouteTypes {
     | '/dashboard/billing'
     | '/dashboard/calls'
     | '/dashboard/chat-history'
+    | '/dashboard/did-numbers'
     | '/dashboard/integrations'
     | '/dashboard/knowledge-base'
     | '/dashboard/outbound'
@@ -461,6 +482,7 @@ export interface FileRouteTypes {
     | '/dashboard/qa'
     | '/dashboard/schedules'
     | '/dashboard/settings'
+    | '/dashboard/sip-trunks'
     | '/dashboard/workflows'
     | '/dashboard/'
     | '/dashboard/agents/new'
@@ -497,6 +519,7 @@ export interface FileRouteTypes {
     | '/dashboard/billing'
     | '/dashboard/calls'
     | '/dashboard/chat-history'
+    | '/dashboard/did-numbers'
     | '/dashboard/integrations'
     | '/dashboard/knowledge-base'
     | '/dashboard/outbound'
@@ -505,6 +528,7 @@ export interface FileRouteTypes {
     | '/dashboard/qa'
     | '/dashboard/schedules'
     | '/dashboard/settings'
+    | '/dashboard/sip-trunks'
     | '/dashboard/workflows'
     | '/dashboard'
     | '/dashboard/agents/new'
@@ -542,6 +566,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/billing'
     | '/_authenticated/dashboard/calls'
     | '/_authenticated/dashboard/chat-history'
+    | '/_authenticated/dashboard/did-numbers'
     | '/_authenticated/dashboard/integrations'
     | '/_authenticated/dashboard/knowledge-base'
     | '/_authenticated/dashboard/outbound'
@@ -550,6 +575,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/qa'
     | '/_authenticated/dashboard/schedules'
     | '/_authenticated/dashboard/settings'
+    | '/_authenticated/dashboard/sip-trunks'
     | '/_authenticated/dashboard/workflows'
     | '/_authenticated/dashboard/'
     | '/_authenticated/dashboard/agents/new'
@@ -761,6 +787,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardWorkflowsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/dashboard/sip-trunks': {
+      id: '/_authenticated/dashboard/sip-trunks'
+      path: '/dashboard/sip-trunks'
+      fullPath: '/dashboard/sip-trunks'
+      preLoaderRoute: typeof AuthenticatedDashboardSipTrunksRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/dashboard/settings': {
       id: '/_authenticated/dashboard/settings'
       path: '/dashboard/settings'
@@ -815,6 +848,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard/integrations'
       fullPath: '/dashboard/integrations'
       preLoaderRoute: typeof AuthenticatedDashboardIntegrationsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dashboard/did-numbers': {
+      id: '/_authenticated/dashboard/did-numbers'
+      path: '/dashboard/did-numbers'
+      fullPath: '/dashboard/did-numbers'
+      preLoaderRoute: typeof AuthenticatedDashboardDidNumbersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard/chat-history': {
@@ -927,6 +967,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardBillingRoute: typeof AuthenticatedDashboardBillingRoute
   AuthenticatedDashboardCallsRoute: typeof AuthenticatedDashboardCallsRouteWithChildren
   AuthenticatedDashboardChatHistoryRoute: typeof AuthenticatedDashboardChatHistoryRoute
+  AuthenticatedDashboardDidNumbersRoute: typeof AuthenticatedDashboardDidNumbersRoute
   AuthenticatedDashboardIntegrationsRoute: typeof AuthenticatedDashboardIntegrationsRoute
   AuthenticatedDashboardKnowledgeBaseRoute: typeof AuthenticatedDashboardKnowledgeBaseRoute
   AuthenticatedDashboardOutboundRoute: typeof AuthenticatedDashboardOutboundRoute
@@ -935,6 +976,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardQaRoute: typeof AuthenticatedDashboardQaRoute
   AuthenticatedDashboardSchedulesRoute: typeof AuthenticatedDashboardSchedulesRouteWithChildren
   AuthenticatedDashboardSettingsRoute: typeof AuthenticatedDashboardSettingsRoute
+  AuthenticatedDashboardSipTrunksRoute: typeof AuthenticatedDashboardSipTrunksRoute
   AuthenticatedDashboardWorkflowsRoute: typeof AuthenticatedDashboardWorkflowsRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedDashboardAgentsNewRoute: typeof AuthenticatedDashboardAgentsNewRoute
@@ -950,6 +992,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedDashboardCallsRouteWithChildren,
   AuthenticatedDashboardChatHistoryRoute:
     AuthenticatedDashboardChatHistoryRoute,
+  AuthenticatedDashboardDidNumbersRoute: AuthenticatedDashboardDidNumbersRoute,
   AuthenticatedDashboardIntegrationsRoute:
     AuthenticatedDashboardIntegrationsRoute,
   AuthenticatedDashboardKnowledgeBaseRoute:
@@ -962,6 +1005,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardSchedulesRoute:
     AuthenticatedDashboardSchedulesRouteWithChildren,
   AuthenticatedDashboardSettingsRoute: AuthenticatedDashboardSettingsRoute,
+  AuthenticatedDashboardSipTrunksRoute: AuthenticatedDashboardSipTrunksRoute,
   AuthenticatedDashboardWorkflowsRoute: AuthenticatedDashboardWorkflowsRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedDashboardAgentsNewRoute: AuthenticatedDashboardAgentsNewRoute,

@@ -729,24 +729,40 @@ async def asterisk_inbound(request: Request, db: Client = Depends(get_db)):
     # 3. Normalize dialed number
     normalized_dialed = _normalize_phone(dialed_number)
 
-    # 4. Find DID in database (phone_numbers table)
-    phone_result = await asyncio.to_thread(
-        db.table("phone_numbers").select("id, workspace_id, agent_id").eq("phone_number", normalized_dialed).execute
+    # 4. Search in did_numbers table first
+    did_result = await asyncio.to_thread(
+        db.table("did_numbers").select("id, workspace_id, agent_id").eq("phone_number", normalized_dialed).eq("status", "active").execute
     )
-    if not phone_result.data:
-        # Fallback to raw dialed number lookup
-        phone_result = await asyncio.to_thread(
-            db.table("phone_numbers").select("id, workspace_id, agent_id").eq("phone_number", dialed_number).execute
+    if not did_result.data:
+        did_result = await asyncio.to_thread(
+            db.table("did_numbers").select("id, workspace_id, agent_id").eq("phone_number", dialed_number).eq("status", "active").execute
         )
 
-    if not phone_result.data:
-        logger.error(f"[Asterisk Webhook] Phone number {dialed_number} (normalized: {normalized_dialed}) not found in DB")
-        return {"status": "error", "message": f"Phone number {dialed_number} not found"}
+    if did_result.data and isinstance(did_result.data, list):
+        phone_data = did_result.data[0]
+        workspace_id = phone_data.get("workspace_id")
+        agent_id = phone_data.get("agent_id")
+        phone_id = phone_data.get("id")
+        is_did = True
+    else:
+        # Fallback to phone_numbers table
+        phone_result = await asyncio.to_thread(
+            db.table("phone_numbers").select("id, workspace_id, agent_id").eq("phone_number", normalized_dialed).execute
+        )
+        if not phone_result.data:
+            phone_result = await asyncio.to_thread(
+                db.table("phone_numbers").select("id, workspace_id, agent_id").eq("phone_number", dialed_number).execute
+            )
 
-    phone_data = phone_result.data[0]
-    workspace_id = phone_data.get("workspace_id")
-    agent_id = phone_data.get("agent_id")
-    phone_id = phone_data.get("id")
+        if not phone_result.data:
+            logger.error(f"[Asterisk Webhook] Phone number {dialed_number} (normalized: {normalized_dialed}) not found in did_numbers or phone_numbers")
+            return {"status": "error", "message": f"Phone number {dialed_number} not found"}
+
+        phone_data = phone_result.data[0]
+        workspace_id = phone_data.get("workspace_id")
+        agent_id = phone_data.get("agent_id")
+        phone_id = phone_data.get("id")
+        is_did = False
 
     if not agent_id:
         logger.error(f"[Asterisk Webhook] No agent assigned to phone number {dialed_number}")
@@ -758,13 +774,12 @@ async def asterisk_inbound(request: Request, db: Client = Depends(get_db)):
             # Generate a new unique UUID for the call's database primary key
             import uuid
             db_call_id = str(uuid.uuid4())
-            db.table("calls").insert({
+            insert_payload = {
                 "id": db_call_id,
                 "call_uuid": call_uuid,
                 "twilio_call_sid": call_uuid,  # fallback for uniqueness
                 "workspace_id": workspace_id,
                 "agent_id": agent_id,
-                "phone_number_id": phone_id,
                 "caller_phone_number": caller_id,
                 "caller_id": caller_id,
                 "dialed_number": dialed_number,
@@ -772,7 +787,15 @@ async def asterisk_inbound(request: Request, db: Client = Depends(get_db)):
                 "status": "created",
                 "provider": provider,
                 "metadata": {"provider": provider}
-            }).execute()
+            }
+            if is_did:
+                insert_payload["did_number_id"] = phone_id
+                insert_payload["phone_number_id"] = None
+            else:
+                insert_payload["phone_number_id"] = phone_id
+                insert_payload["did_number_id"] = None
+
+            db.table("calls").insert(insert_payload).execute()
             logger.info(f"[Asterisk Webhook] Created DB call record for {call_uuid} mapping to DB id {db_call_id}")
         except Exception as db_exc:
             logger.error(f"[Asterisk Webhook] Failed to insert call record in DB: {db_exc}", exc_info=True)
