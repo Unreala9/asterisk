@@ -1,0 +1,91 @@
+import asyncio
+import logging
+from typing import AsyncGenerator, Dict, List, Optional
+
+import openai
+from anthropic import Anthropic
+
+logger = logging.getLogger(__name__)
+
+
+class LLMService:
+    def __init__(self, openai_key: Optional[str], anthropic_key: Optional[str]):
+        self.openai_client = openai.AsyncOpenAI(api_key=openai_key) if openai_key else None
+        self.anthropic_client = Anthropic(api_key=anthropic_key) if anthropic_key else None
+
+    # ──────────────────────────────────────────
+    # Non-streaming (used by phone webhook)
+    # ──────────────────────────────────────────
+    async def generate(
+        self,
+        system_prompt: str,
+        messages: List[Dict[str, str]],
+        model: str = "gpt-4-turbo",
+        temperature: float = 0.7,
+        max_tokens: int = 150,
+    ) -> str:
+        try:
+            if model.startswith("gpt"):
+                if not self.openai_client:
+                    raise ValueError("OpenAI API key not configured")
+                response = await self.openai_client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "system", "content": system_prompt}] + messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return response.choices[0].message.content or ""
+
+            elif model.startswith("claude"):
+                if not self.anthropic_client:
+                    raise ValueError("Anthropic API key not configured")
+                response = await asyncio.to_thread(
+                    self.anthropic_client.messages.create,
+                    model=model,
+                    system=system_prompt,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return response.content[0].text
+
+            raise ValueError(f"Unsupported model: {model}")
+        except Exception as e:
+            logger.error("LLM generate failed: %s", e)
+            raise
+
+    # ──────────────────────────────────────────
+    # Streaming — yields raw token strings
+    # ──────────────────────────────────────────
+    async def generate_stream(
+        self,
+        system_prompt: str,
+        messages: List[Dict[str, str]],
+        model: str = "gpt-4o-mini",
+        temperature: float = 0.7,
+        max_tokens: int = 80,
+    ) -> AsyncGenerator[str, None]:
+        if not self.openai_client:
+            raise ValueError("OpenAI API key not configured")
+        if not model.startswith("gpt"):
+            # Claude streaming not implemented — fall back to non-streaming
+            full = await self.generate(system_prompt, messages, model, temperature, max_tokens)
+            for chunk in full.split(" "):
+                yield chunk + " "
+            return
+
+        try:
+            stream = await self.openai_client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": system_prompt}] + messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+            )
+            async for chunk in stream:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    yield delta
+        except Exception as e:
+            logger.error("LLM stream failed: %s", e)
+            raise

@@ -1,0 +1,79 @@
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+from typing import Optional
+
+class Settings(BaseSettings):
+    # Supabase
+    supabase_url: str
+    supabase_anon_key: str
+    supabase_jwt_secret: str
+    voice_pilot_sso_secret: Optional[str] = None
+
+    
+    # External APIs
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    deepgram_api_key: Optional[str] = None
+    elevenlabs_api_key: Optional[str] = None
+    sarvam_api_key: Optional[str] = None
+    telephony_provider: str = "telnyx"
+    telnyx_api_key: Optional[str] = None
+    telnyx_account_sid: Optional[str] = None
+    telnyx_connection_id: Optional[str] = None
+    telnyx_webhook_url: Optional[str] = None
+    telnyx_phone_number: Optional[str] = None
+    twilio_account_sid: Optional[str] = None
+    twilio_auth_token: Optional[str] = None
+    twilio_webhook_url: Optional[str] = None
+    twilio_phone_number: Optional[str] = None
+    local_agent_knowledge_base_path: Optional[str] = None
+    public_base_url: Optional[str] = None
+    
+    # Asterisk AudioSocket
+    asterisk_audiosocket_enabled: bool = True
+    asterisk_audiosocket_host: str = "127.0.0.1"
+    asterisk_audiosocket_port: int = 9092
+    asterisk_webhook_secret: Optional[str] = None
+    asterisk_provider_name: str = "airtel_or_jio"
+    asterisk_default_sample_rate: int = 8000
+    
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
+    
+    # Celery
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
+    
+    # API
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
+    api_workers: int = 4
+    
+    # App
+    environment: str = "development"
+    log_level: str = "INFO"
+    debug: bool = False
+    
+    # Limits
+    call_timeout_seconds: int = 3600  # 1 hour
+    inactivity_timeout_seconds: int = 30
+    max_concurrent_calls_per_workspace: int = 100
+    max_message_history_size: int = 50
+    
+    # Latency targets
+    stt_timeout_seconds: float = 3.0
+    llm_timeout_seconds: float = 4.0
+    tts_timeout_seconds: float = 5.0
+    
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False,
+        "env_prefix": "",
+        "extra": "ignore"
+    }
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+settings = get_settings()

@@ -1,0 +1,42 @@
+.card-swap-container {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  transform: translate(5%, 20%);
+  transform-origin: bottom right;
+
+  perspective: 900px;
+  overflow: visible;
+}
+
+.card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 24px; /* Matches rounded.lg from DESIGN.md */
+  border: 1px solid #e6e6e6; /* Matches hairline from DESIGN.md */
+  background: #ffffff; /* Default canvas color */
+
+  transform-style: preserve-3d;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06); /* Matches level 2 elevation from DESIGN.md */
+  padding: 32px; /* Matches spacing.xl */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .card-swap-container {
+    transform: scale(0.75) translate(25%, 25%);
+  }
+}
+
+@media (max-width: 480px) {
+  .card-swap-container {
+    transform: scale(0.55) translate(25%, 25%);
+  }
+}
