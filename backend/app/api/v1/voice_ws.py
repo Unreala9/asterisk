@@ -326,12 +326,16 @@ class VoiceSession:
         base = (self.config.get("agent_system_prompt") or self.config.get("system_prompt") or "You are a helpful voice assistant.").strip()
         kb = (self.config.get("knowledge_base") or "").strip()
         
-        # Get resolved voice gender
+        # Get resolved voice gender and language settings
         voice_id = self.config.get("voice_id")
         voice_gender = self.config.get("voice_gender")
         from app.utils.post_processor import detect_voice_gender
         gender = voice_gender.lower() if voice_gender else detect_voice_gender(voice_id)
         
+        # Determine language (Hinglish/English vs pure Hindi)
+        language = (self.config.get("language") or "en-US").lower()
+        is_hindi = language.startswith("hi") or (self.config.get("tts_provider") == "sarvam")
+
         # Swap the Voice Agent Persona block dynamically to match the current gender
         if "--- Voice Agent Persona ---" in base:
             parts = base.split("--- Voice Agent Persona ---")
@@ -340,18 +344,33 @@ class VoiceSession:
             base = f"{header}\n\n{persona_block}"
         else:
             # Fallback override if the block is not structured
-            if gender == "male":
-                base += "\n\nOVERRIDE: You are a male Indian voice assistant. Use male Hinglish grammar rules: 'sakta hoon', 'gaya', 'leta hoon', 'deta hoon'. Do NOT use female phrases."
+            if is_hindi:
+                if gender == "male":
+                    base += "\n\nOVERRIDE: आप एक पुरुष (male) भारतीय वॉयस असिस्टेंट हैं। बातचीत में पुल्लिंग हिंदी व्याकरण नियमों का उपयोग करें, जैसे: 'सकता हूँ', 'गया', 'लेता हूँ', 'देता हूँ'। स्त्रीलिंग शब्द या क्रियाओं का उपयोग न करें।"
+                else:
+                    base += "\n\nOVERRIDE: आप एक महिला (female) भारतीय वॉयस असिस्टेंट हैं। बातचीत में स्त्रीलिंग हिंदी व्याकरण नियमों का उपयोग करें, जैसे: 'सकती हूँ', 'गई', 'लेती हूँ', 'देती हूँ'। पुल्लिंग शब्द या क्रियाओं का उपयोग न करें।"
             else:
-                base += "\n\nOVERRIDE: You are a female Indian voice assistant. Use female Hinglish grammar rules: 'sakti hoon', 'gayi', 'leti hoon', 'deti hoon'. Do NOT use male phrases."
+                if gender == "male":
+                    base += "\n\nOVERRIDE: You are a male Indian voice assistant. Use male Hinglish grammar rules: 'sakta hoon', 'gaya', 'leta hoon', 'deta hoon'. Do NOT use female phrases."
+                else:
+                    base += "\n\nOVERRIDE: You are a female Indian voice assistant. Use female Hinglish grammar rules: 'sakti hoon', 'gayi', 'leti hoon', 'deti hoon'. Do NOT use male phrases."
 
-        # Strict prompt instructions for short natural Hinglish replies
-        voice_prefix = (
-            "You are a real-time voice assistant. You MUST answer in short Hinglish. "
-            "Maximum response length: 1–2 sentences. Avoid long explanations. "
-            "Use natural spoken language. Never generate paragraphs for voice calls. "
-            "Keep replies brief, direct, and conversational."
-        )
+        # Strict prompt instructions based on the selected language
+        if is_hindi:
+            voice_prefix = (
+                "You are a real-time voice assistant. You MUST answer in short, natural Hindi (Devanagari script). "
+                "Do NOT use Roman Hinglish. Speak and reply using clean, conversational Hindi. "
+                "Maximum response length: 1–2 sentences. Avoid long explanations. "
+                "Keep replies brief, direct, and conversational."
+            )
+        else:
+            voice_prefix = (
+                "You are a real-time voice assistant. You MUST answer in short Hinglish. "
+                "Maximum response length: 1–2 sentences. Avoid long explanations. "
+                "Use natural spoken language. Never generate paragraphs for voice calls. "
+                "Keep replies brief, direct, and conversational."
+            )
+
         full = f"{voice_prefix}\n\n{base}"
         if kb:
             full += f"\n\nKnowledge base:\n{kb}"
