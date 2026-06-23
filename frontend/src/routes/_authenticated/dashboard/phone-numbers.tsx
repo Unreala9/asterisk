@@ -60,7 +60,7 @@ function PhoneNumbersPage() {
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
 
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000"
+  const apiUrl = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "")
 
   const fetchData = useCallback(async (wsId: string, headers: Record<string, string>) => {
     const [pnRes, agentRes] = await Promise.all([

@@ -351,7 +351,7 @@ function CreateAgentPage() {
           setIsInitialLoading(false);
           return;
         }
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, "");
         const headers = {
           'Authorization': `Bearer ${session.access_token}`,
           'ngrok-skip-browser-warning': 'true',
@@ -504,6 +504,15 @@ function CreateAgentPage() {
         setError("Not authenticated. Please log in again.")
         return
       }
+<<<<<<< Updated upstream
+=======
+      const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, "")
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'ngrok-skip-browser-warning': 'true',
+      }
+>>>>>>> Stashed changes
 
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 

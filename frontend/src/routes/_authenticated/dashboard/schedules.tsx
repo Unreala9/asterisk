@@ -65,7 +65,7 @@ function SchedulesPage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [authHeaders, setAuthHeaders] = useState<any>(null);
 
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const apiUrl = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
   const fetchSchedules = async (wsId: string, headers: any) => {
     try {
