@@ -7,7 +7,7 @@ from app.services.stt_service import STTService
 from app.services.llm_service import LLMService
 from app.services.tts_service import TTSService
 from app.services.telephony_service import TelephonyService
-from app.db.client import Client
+from app.db.client import Client, fetch_agent_with_context
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +54,9 @@ class CallOrchestrator:
         """Initialize a new call session"""
         
         # 1. Fetch agent config
-        agent_result = self.db.table("agents").select("*").eq("id", agent_id).execute()
-        if not agent_result.data:
+        agent_data = fetch_agent_with_context(self.db, agent_id)
+        if not agent_data:
             raise ValueError(f"Agent {agent_id} not found")
-        
-        agent_data = agent_result.data[0]
         
         # 2. Create call record in DB
         call_data = {
@@ -94,9 +92,11 @@ class CallOrchestrator:
             
         context.messages.append({"role": "user", "content": transcript})
         
+        system_prompt = (context.agent.get("agent_system_prompt") or context.agent.get("system_prompt") or "You are a helpful voice assistant. Be concise.").strip()
+
         # 2. Generate Response
         response_text = await self.llm.generate(
-            system_prompt=context.agent["system_prompt"],
+            system_prompt=system_prompt,
             messages=context.messages[-10:], # Last 10 messages for context
             model=context.agent.get("model", "gpt-4-turbo"),
             temperature=float(context.agent.get("temperature", 0.7))

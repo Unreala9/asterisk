@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any
 import json
 import logging
-from app.db.client import get_db, Client
+from app.db.client import get_db, Client, fetch_agent_with_context, fetch_workspace_agents_with_context, save_agent_context
 
 logger = logging.getLogger(__name__)
 
@@ -99,10 +99,18 @@ async def create_agent(workspace_id: str, agent_data: Dict[str, Any], db: Client
         "workflow_data": agent_data.get("workflow_data") or {},
     }
 
+    if "kb_metadata" in agent_data:
+        kb_metadata = {**kb_metadata, **agent_data["kb_metadata"]}
+
+    system_prompt = agent_data.get("system_prompt")
+    if not system_prompt:
+        system_prompt = _compile_system_prompt(agent_data)
+
     db_data = {
         "workspace_id": workspace_id,
         "name": agent_data.get("name"),
-        "system_prompt": _compile_system_prompt(agent_data),
+        "system_prompt": system_prompt,
+        "agent_system_prompt": agent_data.get("agent_system_prompt"),
         "voice_id": voice,
         "voice_provider": VOICE_PROVIDER_MAP.get(voice, "elevenlabs"),
         "language": agent_data.get("language", "en-US"),
@@ -118,6 +126,11 @@ async def create_agent(workspace_id: str, agent_data: Dict[str, Any], db: Client
     result = db.table("agents").insert(db_data).execute()
     new_agent = result.data[0]
 
+    # Save to agent_contexts
+    save_agent_context(db, new_agent["id"], agent_data.get("knowledge_base", ""), agent_data.get("agent_system_prompt", ""))
+    new_agent["knowledge_base"] = agent_data.get("knowledge_base", "")
+    new_agent["agent_system_prompt"] = agent_data.get("agent_system_prompt", "")
+
     # Handle phone number assignment if provided
     phone_number_id = agent_data.get("phone_number_id")
     if phone_number_id:
@@ -129,17 +142,16 @@ async def create_agent(workspace_id: str, agent_data: Dict[str, Any], db: Client
 @router.get("/{workspace_id}/agents")
 async def list_agents(workspace_id: str, db: Client = Depends(get_db)):
     """List all agents in a workspace"""
-    result = db.table("agents").select("*").eq("workspace_id", workspace_id).execute()
-    return result.data
+    return fetch_workspace_agents_with_context(db, workspace_id)
 
 
 @router.get("/{workspace_id}/agents/{agent_id}")
 async def get_agent(workspace_id: str, agent_id: str, db: Client = Depends(get_db)):
     """Get agent details"""
-    result = db.table("agents").select("*").eq("workspace_id", workspace_id).eq("id", agent_id).execute()
-    if not result.data:
+    agent = fetch_agent_with_context(db, agent_id)
+    if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return result.data[0]
+    return agent
 
 
 @router.patch("/{workspace_id}/agents/{agent_id}")
@@ -150,12 +162,10 @@ async def update_agent(workspace_id: str, agent_id: str, agent_data: Dict[str, A
     
     logger.info(f"Updating agent {agent_id} in workspace {workspace_id}. Payload: {agent_data}")
 
-    existing_result = db.table("agents").select("*").eq("workspace_id", workspace_id).eq("id", agent_id).execute()
-    if not existing_result.data:
+    existing = fetch_agent_with_context(db, agent_id)
+    if not existing or existing.get("workspace_id") != workspace_id:
         logger.error(f"Agent {agent_id} not found in workspace {workspace_id}")
         raise HTTPException(status_code=404, detail="Agent not found")
-
-    existing = existing_result.data[0]
 
     # Initialize update payload
     update_payload = {}
@@ -172,6 +182,9 @@ async def update_agent(workspace_id: str, agent_id: str, agent_data: Dict[str, A
     if "webhook_url" in agent_data: 
         update_payload["handoff_webhook_url"] = agent_data["webhook_url"]
         update_payload["handoff_enabled"] = bool(agent_data["webhook_url"])
+
+    if "agent_system_prompt" in agent_data:
+        update_payload["agent_system_prompt"] = agent_data["agent_system_prompt"]
 
     if "allow_interruptions" in agent_data:
         update_payload["interrupt_enabled"] = agent_data["allow_interruptions"]
@@ -216,6 +229,13 @@ async def update_agent(workspace_id: str, agent_id: str, agent_data: Dict[str, A
         kb_metadata = {**kb_metadata, "workflow_data": agent_data["workflow_data"]}
         update_payload["kb_metadata"] = kb_metadata
 
+    if "kb_metadata" in agent_data:
+        kb_metadata = {**kb_metadata, **agent_data["kb_metadata"]}
+        update_payload["kb_metadata"] = kb_metadata
+
+    if "system_prompt" in agent_data:
+        update_payload["system_prompt"] = agent_data["system_prompt"]
+
     # Update fallback message if relevant fields changed
     if any(k in agent_data for k in ["human_fallback_name", "human_fallback_extension"]):
         fb_name = agent_data.get("human_fallback_name", kb_metadata.get("human_fallback_name", "")).strip()
@@ -242,17 +262,24 @@ async def update_agent(workspace_id: str, agent_id: str, agent_data: Dict[str, A
         }
         update_payload["system_prompt"] = _compile_system_prompt(prompt_fields)
 
+    if "knowledge_base" in agent_data or "agent_system_prompt" in agent_data:
+        save_agent_context(
+            db,
+            agent_id,
+            knowledge_base=agent_data.get("knowledge_base"),
+            agent_system_prompt=agent_data.get("agent_system_prompt")
+        )
+
     if not update_payload and "phone_number_id" not in agent_data:
-        return existing
+        return fetch_agent_with_context(db, agent_id)
 
-    db.table("agents").update(update_payload).eq("id", agent_id).execute()
+    if update_payload:
+        db.table("agents").update(update_payload).eq("id", agent_id).execute()
 
-    fetch_result = db.table("agents").select("*").eq("id", agent_id).execute()
-    if not fetch_result.data:
+    updated_agent = fetch_agent_with_context(db, agent_id)
+    if not updated_agent:
         logger.error(f"Update failed for agent {agent_id}: record not found after update")
         raise HTTPException(status_code=404, detail="Agent not found or update failed")
-    
-    updated_agent = fetch_result.data[0]
     logger.info(f"Successfully updated agent {agent_id}. New status: {updated_agent.get('status')}")
 
     # Handle phone number assignment/unassignment if provided

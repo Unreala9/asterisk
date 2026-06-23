@@ -405,7 +405,7 @@ export function ScheduleTaskModal({ workspaceId, agents, onSuccess, authHeaders 
             <div className="space-y-1.5">
               <Label className="text-[11px] font-mono uppercase tracking-widest text-black/40">Recipient Number</Label>
               <Input
-                placeholder="+1 (555) 000-0000"
+                placeholder="+91 98765-43210"
                 className="h-11 rounded-xl border-[#e6e6e6] bg-[#f7f7f5]/30 focus:border-black focus:ring-0 text-[14px]"
                 value={formData.recipient_number}
                 onChange={(e) => setFormData({ ...formData, recipient_number: e.target.value })}

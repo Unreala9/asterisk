@@ -8,7 +8,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from app.db.client import get_db, Client
+from app.db.client import get_db, Client, fetch_agent_with_context
 from app.core.config import settings
 from app.services.stt_service import STTService
 from app.services.llm_service import LLMService
@@ -87,13 +87,12 @@ async def agent_ask(
       audio OR text  ->  STT  ->  LLM  ->  TTS  ->  {stt, answer, audio_b64, should_stop}
     """
     # 1. Load agent config from DB
-    result = db.table("agents").select("*").eq("id", agent_id).execute()
-    if not result.data:
+    agent = fetch_agent_with_context(db, agent_id)
+    if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    agent = result.data[0]
     workspace_id = agent.get("workspace_id")
 
-    system_prompt = agent.get("system_prompt", "You are a helpful voice assistant. Be concise.")
+    system_prompt = (agent.get("agent_system_prompt") or agent.get("system_prompt") or "You are a helpful voice assistant. Be concise.").strip()
     language = agent.get("language", "en-US")
     voice_id = agent.get("voice_id", "aura-asteria-en")
     model = agent.get("model", "gpt-4-turbo")

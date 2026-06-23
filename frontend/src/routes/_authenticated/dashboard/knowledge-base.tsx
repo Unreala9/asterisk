@@ -174,7 +174,8 @@ function KnowledgeBasePage() {
             {/* Empty State / Create Card */}
             <Link
               to="/dashboard/agents/new"
-               className="group flex min-h-[220px] flex-col items-center justify-center rounded-[20px] border-2 border-dashed border-[#e6e6e6] p-6 text-center transition-all duration-300 hover:border-black hover:bg-[#f7f7f5]"
+              search={{ agentId: undefined }}
+              className="group flex min-h-[220px] flex-col items-center justify-center rounded-[20px] border-2 border-dashed border-[#e6e6e6] p-6 text-center transition-all duration-300 hover:border-black hover:bg-[#f7f7f5]"
             >
               <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[#e6e6e6] transition-all group-hover:border-black group-hover:bg-black">
                 <Plus className="h-7 w-7 text-black transition-all group-hover:text-white" />
@@ -188,7 +189,7 @@ function KnowledgeBasePage() {
             <Bot className="h-12 w-12 text-black/10" />
             <p className="text-[15px] font-[330] text-black/50">{status}</p>
             <Button asChild className="h-10 rounded-full bg-black px-7 text-[14px] font-[480] text-white transition-all hover:bg-black/90">
-              <Link to="/dashboard/agents/new">
+              <Link to="/dashboard/agents/new" search={{ agentId: undefined }}>
                 <Plus className="h-5 w-5 mr-3" />
                 Create First Agent
               </Link>

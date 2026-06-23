@@ -323,7 +323,7 @@ class VoiceSession:
         self.speaking_started_at = 0.0
 
     def _build_system_prompt(self) -> str:
-        base = (self.config.get("system_prompt") or "You are a helpful voice assistant.").strip()
+        base = (self.config.get("agent_system_prompt") or self.config.get("system_prompt") or "You are a helpful voice assistant.").strip()
         kb = (self.config.get("knowledge_base") or "").strip()
         
         # Get resolved voice gender
@@ -690,7 +690,7 @@ class VoiceSession:
             )
 
             def ends_with_punctuation(w: str) -> bool:
-                return len(w) > 0 and w[-1] in (".", "!", "?", "।", ",", ";")
+                return len(w) > 0 and w[-1] in (".", "!", "?", "।")
 
             async for token in llm_stream:
                 if self.barge_in_event.is_set():
@@ -803,19 +803,17 @@ async def voice_websocket(ws: WebSocket):
     agent_id = ws.query_params.get("agent_id")
     if agent_id:
         try:
-            from app.db.client import get_supabase_client
+            from app.db.client import get_supabase_client, fetch_agent_with_context
             db = get_supabase_client()
-            def _get_agent():
-                return db.table("agents").select("*").eq("id", agent_id).execute()
-            agent_res = await asyncio.to_thread(_get_agent)
-            if agent_res.data:
-                agent = agent_res.data[0]
+            agent = await asyncio.to_thread(fetch_agent_with_context, db, agent_id)
+            if agent:
                 kb_meta = agent.get("kb_metadata") or {}
                 session.config = {
                     "model": agent.get("model") or voice_cfg.OPENAI_VOICE_MODEL,
                     "language": agent.get("language") or "hi-IN",
                     "voice_id": agent.get("voice_id") or "aura-asteria-en",
                     "tts_provider": kb_meta.get("tts_provider") or "deepgram",
+                    "agent_system_prompt": agent.get("agent_system_prompt") or "",
                     "system_prompt": agent.get("system_prompt") or "",
                     "knowledge_base": agent.get("knowledge_base") or "",
                     "voice_gender": kb_meta.get("voice_gender") or "female",
@@ -993,19 +991,17 @@ async def voice_websocket(ws: WebSocket):
                             if agent_id_from_msg:
                                 logger.info(f"[WS_START] Loading config for agent {agent_id_from_msg} from customParameters")
                                 try:
-                                    from app.db.client import get_supabase_client
+                                    from app.db.client import get_supabase_client, fetch_agent_with_context
                                     db = get_supabase_client()
-                                    def _get_agent():
-                                        return db.table("agents").select("*").eq("id", agent_id_from_msg).execute()
-                                    agent_res = await asyncio.to_thread(_get_agent)
-                                    if agent_res.data:
-                                        agent = agent_res.data[0]
+                                    agent = await asyncio.to_thread(fetch_agent_with_context, db, agent_id_from_msg)
+                                    if agent:
                                         kb_meta = agent.get("kb_metadata") or {}
                                         session.config = {
                                             "model": agent.get("model") or voice_cfg.OPENAI_VOICE_MODEL,
                                             "language": agent.get("language") or "hi-IN",
                                             "voice_id": agent.get("voice_id") or "aura-asteria-en",
                                             "tts_provider": kb_meta.get("tts_provider") or "deepgram",
+                                            "agent_system_prompt": agent.get("agent_system_prompt") or "",
                                             "system_prompt": agent.get("system_prompt") or "",
                                             "knowledge_base": agent.get("knowledge_base") or "",
                                             "voice_gender": kb_meta.get("voice_gender") or "female",
@@ -1209,13 +1205,10 @@ async def voice_websocket(ws: WebSocket):
 
 @router.get("/api/test-llm")
 async def test_llm_endpoint():
-    from app.db.client import get_supabase_client
+    from app.db.client import get_supabase_client, fetch_agent_with_context
     db = get_supabase_client()
     agent_id = "fee34fc7-1c3d-4554-9c81-da4111df3651"
-    def _get_agent():
-        return db.table("agents").select("*").eq("id", agent_id).execute()
-    agent_res = await asyncio.to_thread(_get_agent)
-    agent = agent_res.data[0]
+    agent = await asyncio.to_thread(fetch_agent_with_context, db, agent_id)
     kb_meta = agent.get("kb_metadata") or {}
     
     config = {
@@ -1223,6 +1216,7 @@ async def test_llm_endpoint():
         "language": agent.get("language") or "hi-IN",
         "voice_id": agent.get("voice_id") or "aura-asteria-en",
         "tts_provider": kb_meta.get("tts_provider") or "deepgram",
+        "agent_system_prompt": agent.get("agent_system_prompt") or "",
         "system_prompt": agent.get("system_prompt") or "",
         "knowledge_base": agent.get("knowledge_base") or "",
         "voice_gender": kb_meta.get("voice_gender") or "female",

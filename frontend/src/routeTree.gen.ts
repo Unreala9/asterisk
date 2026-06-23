@@ -53,6 +53,7 @@ import { Route as AuthenticatedDashboardAlertingRouteImport } from './routes/_au
 import { Route as AuthenticatedDashboardAgentsIndexRouteImport } from './routes/_authenticated/dashboard/agents/index'
 import { Route as AuthenticatedDashboardSchedulesIdRouteImport } from './routes/_authenticated/dashboard/schedules.$id'
 import { Route as AuthenticatedDashboardCallsCallIdRouteImport } from './routes/_authenticated/dashboard/calls/$callId'
+import { Route as AuthenticatedDashboardAgentsSetupRouteImport } from './routes/_authenticated/dashboard/agents/setup'
 import { Route as AuthenticatedDashboardAgentsNewRouteImport } from './routes/_authenticated/dashboard/agents/new'
 
 const Voice_ssoRoute = Voice_ssoRouteImport.update({
@@ -295,6 +296,12 @@ const AuthenticatedDashboardCallsCallIdRoute =
     path: '/$callId',
     getParentRoute: () => AuthenticatedDashboardCallsRoute,
   } as any)
+const AuthenticatedDashboardAgentsSetupRoute =
+  AuthenticatedDashboardAgentsSetupRouteImport.update({
+    id: '/dashboard/agents/setup',
+    path: '/dashboard/agents/setup',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedDashboardAgentsNewRoute =
   AuthenticatedDashboardAgentsNewRouteImport.update({
     id: '/dashboard/agents/new',
@@ -344,6 +351,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/workflows': typeof AuthenticatedDashboardWorkflowsRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/dashboard/agents/new': typeof AuthenticatedDashboardAgentsNewRoute
+  '/dashboard/agents/setup': typeof AuthenticatedDashboardAgentsSetupRoute
   '/dashboard/calls/$callId': typeof AuthenticatedDashboardCallsCallIdRoute
   '/dashboard/schedules/$id': typeof AuthenticatedDashboardSchedulesIdRoute
   '/dashboard/agents/': typeof AuthenticatedDashboardAgentsIndexRoute
@@ -390,6 +398,7 @@ export interface FileRoutesByTo {
   '/dashboard/workflows': typeof AuthenticatedDashboardWorkflowsRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/dashboard/agents/new': typeof AuthenticatedDashboardAgentsNewRoute
+  '/dashboard/agents/setup': typeof AuthenticatedDashboardAgentsSetupRoute
   '/dashboard/calls/$callId': typeof AuthenticatedDashboardCallsCallIdRoute
   '/dashboard/schedules/$id': typeof AuthenticatedDashboardSchedulesIdRoute
   '/dashboard/agents': typeof AuthenticatedDashboardAgentsIndexRoute
@@ -438,6 +447,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/workflows': typeof AuthenticatedDashboardWorkflowsRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/dashboard/agents/new': typeof AuthenticatedDashboardAgentsNewRoute
+  '/_authenticated/dashboard/agents/setup': typeof AuthenticatedDashboardAgentsSetupRoute
   '/_authenticated/dashboard/calls/$callId': typeof AuthenticatedDashboardCallsCallIdRoute
   '/_authenticated/dashboard/schedules/$id': typeof AuthenticatedDashboardSchedulesIdRoute
   '/_authenticated/dashboard/agents/': typeof AuthenticatedDashboardAgentsIndexRoute
@@ -486,6 +496,7 @@ export interface FileRouteTypes {
     | '/dashboard/workflows'
     | '/dashboard/'
     | '/dashboard/agents/new'
+    | '/dashboard/agents/setup'
     | '/dashboard/calls/$callId'
     | '/dashboard/schedules/$id'
     | '/dashboard/agents/'
@@ -532,6 +543,7 @@ export interface FileRouteTypes {
     | '/dashboard/workflows'
     | '/dashboard'
     | '/dashboard/agents/new'
+    | '/dashboard/agents/setup'
     | '/dashboard/calls/$callId'
     | '/dashboard/schedules/$id'
     | '/dashboard/agents'
@@ -579,6 +591,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/workflows'
     | '/_authenticated/dashboard/'
     | '/_authenticated/dashboard/agents/new'
+    | '/_authenticated/dashboard/agents/setup'
     | '/_authenticated/dashboard/calls/$callId'
     | '/_authenticated/dashboard/schedules/$id'
     | '/_authenticated/dashboard/agents/'
@@ -920,6 +933,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardCallsCallIdRouteImport
       parentRoute: typeof AuthenticatedDashboardCallsRoute
     }
+    '/_authenticated/dashboard/agents/setup': {
+      id: '/_authenticated/dashboard/agents/setup'
+      path: '/dashboard/agents/setup'
+      fullPath: '/dashboard/agents/setup'
+      preLoaderRoute: typeof AuthenticatedDashboardAgentsSetupRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/dashboard/agents/new': {
       id: '/_authenticated/dashboard/agents/new'
       path: '/dashboard/agents/new'
@@ -980,6 +1000,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardWorkflowsRoute: typeof AuthenticatedDashboardWorkflowsRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedDashboardAgentsNewRoute: typeof AuthenticatedDashboardAgentsNewRoute
+  AuthenticatedDashboardAgentsSetupRoute: typeof AuthenticatedDashboardAgentsSetupRoute
   AuthenticatedDashboardAgentsIndexRoute: typeof AuthenticatedDashboardAgentsIndexRoute
 }
 
@@ -1009,6 +1030,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardWorkflowsRoute: AuthenticatedDashboardWorkflowsRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedDashboardAgentsNewRoute: AuthenticatedDashboardAgentsNewRoute,
+  AuthenticatedDashboardAgentsSetupRoute:
+    AuthenticatedDashboardAgentsSetupRoute,
   AuthenticatedDashboardAgentsIndexRoute:
     AuthenticatedDashboardAgentsIndexRoute,
 }

@@ -14,6 +14,7 @@ import {
   Clock,
   Volume2,
   User,
+  ClipboardList,
 } from "lucide-react";
 
 
@@ -161,7 +162,7 @@ function AgentsPage() {
           table: "calls",
           filter: `id=eq.${activeCallId}`,
         },
-        (payload) => {
+        (payload: any) => {
           setCallRecord(payload.new);
         }
       )
@@ -178,7 +179,7 @@ function AgentsPage() {
           table: "call_messages",
           filter: `call_id=eq.${activeCallId}`,
         },
-        (payload) => {
+        (payload: any) => {
           setTranscriptMessages((prev) => {
             if (prev.some((m) => m.id === payload.new.id)) return prev;
             return [...prev, payload.new].sort((a, b) => a.sequence_number - b.sequence_number);

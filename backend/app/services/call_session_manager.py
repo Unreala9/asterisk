@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Callable
-from app.db.client import get_supabase_client
+from app.db.client import get_supabase_client, fetch_agent_with_context
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -76,11 +76,8 @@ class CallSessionManager:
                 try:
                     db = get_supabase_client()
                     agent_id = context["agent_id"]
-                    def _get_agent():
-                        return db.table("agents").select("*").eq("id", agent_id).execute()
-                    agent_res = await asyncio.to_thread(_get_agent)
-                    if agent_res.data:
-                        agent = agent_res.data[0]
+                    agent = await asyncio.to_thread(fetch_agent_with_context, db, agent_id)
+                    if agent:
                         kb_meta = agent.get("kb_metadata") or {}
                         context["agent_config"] = {
                             "name": agent.get("name"),
@@ -88,6 +85,7 @@ class CallSessionManager:
                             "language": agent.get("language") or "hi-IN",
                             "voice_id": agent.get("voice_id") or "aura-asteria-en",
                             "tts_provider": kb_meta.get("tts_provider") or "deepgram",
+                            "agent_system_prompt": agent.get("agent_system_prompt") or "",
                             "system_prompt": agent.get("system_prompt") or "",
                             "knowledge_base": agent.get("knowledge_base") or "",
                             "voice_gender": kb_meta.get("voice_gender") or "female"

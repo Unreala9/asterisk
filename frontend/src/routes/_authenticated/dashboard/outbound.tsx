@@ -35,7 +35,7 @@ function OutboundPage() {
           <CardContent className="space-y-4 flex-1">
             <div className="space-y-2">
               <Label>Phone Number</Label>
-              <Input placeholder="+1 (555) 000-0000" />
+              <Input placeholder="+91 98765-43210" />
             </div>
             <div className="space-y-2">
               <Label>Select Agent</Label>

@@ -12,7 +12,7 @@ function AuthCallback() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.exchangeCodeForSession(window.location.href).then(({ error }) => {
+    supabase.auth.exchangeCodeForSession(window.location.href).then(({ error }: any) => {
       if (error) {
         console.error("OAuth callback error:", error.message);
         toast.error("Sign in failed. Please try again.");

@@ -50,7 +50,7 @@ export function useNotifications() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications" },
-        (payload) => {
+        (payload: any) => {
           setNotifications(prev => [payload.new, ...prev].slice(0, 20));
           setUnreadCount(prev => prev + 1);
         }

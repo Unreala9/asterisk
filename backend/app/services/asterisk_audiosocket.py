@@ -155,7 +155,7 @@ class AsteriskVoiceSession:
         self.speaking_started_at = 0.0
 
     def _build_system_prompt(self) -> str:
-        base = (self.config.get('system_prompt') or 'You are a helpful voice assistant.').strip()
+        base = (self.config.get('agent_system_prompt') or self.config.get('system_prompt') or 'You are a helpful voice assistant.').strip()
         kb = (self.config.get('knowledge_base') or '').strip()
         voice_id = self.config.get('voice_id')
         voice_gender = self.config.get('voice_gender')
@@ -355,7 +355,7 @@ class AsteriskVoiceSession:
             task_index += 1
 
         def ends_with_punctuation(w: str) -> bool:
-            return len(w) > 0 and w[-1] in ('.', '!', '?', '।', ',', ';')
+            return len(w) > 0 and w[-1] in ('.', '!', '?', '।')
 
         def _insert_assist_msg(seq: int):
             db = get_supabase_client()

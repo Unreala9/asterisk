@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response, StreamingResponse
 
 from app.core.config import settings
-from app.db.client import Client, get_db
+from app.db.client import Client, get_db, fetch_agent_with_context
 from app.services.llm_service import LLMService
 from app.services.schedule_parser import ScheduleParserService
 
@@ -38,13 +38,11 @@ async def _get_cached_agent(db: Client, agent_id: str) -> dict:
         if now - timestamp < AGENT_CACHE_TTL:
             return agent
 
-    agent_result = await asyncio.to_thread(
-        db.table("agents").select("*").eq("id", agent_id).execute
+    agent = await asyncio.to_thread(
+        fetch_agent_with_context, db, agent_id
     )
-    if not agent_result.data:
+    if not agent:
         raise ValueError(f"Agent {agent_id} not found")
-    
-    agent = agent_result.data[0]
     _agent_cache[agent_id] = (now, agent)
     return agent
 
@@ -75,7 +73,7 @@ def _normalize_phone(phone: str) -> str:
 
 def _build_agent_prompt(agent: dict) -> str:
     """Always inject the live knowledge_base field, stripping any stale compiled KB."""
-    base_prompt = (agent.get("system_prompt") or "You are a helpful voice assistant.").strip()
+    base_prompt = (agent.get("agent_system_prompt") or agent.get("system_prompt") or "You are a helpful voice assistant.").strip()
     knowledge_base = (agent.get("knowledge_base") or "").strip()
 
     # Strip any previously compiled KB section so we never use stale content
