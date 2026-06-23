@@ -690,7 +690,8 @@ class VoiceSession:
             )
 
             def ends_with_punctuation(w: str) -> bool:
-                return len(w) > 0 and w[-1] in (".", "!", "?", "।")
+                # Split on sentence or clause boundaries for natural phrasing and stable intonation
+                return len(w) > 0 and w[-1] in (".", "!", "?", "।", ",", ";", ":")
 
             async for token in llm_stream:
                 if self.barge_in_event.is_set():
@@ -718,10 +719,12 @@ class VoiceSession:
                     words.append(word)
                     word_count = len(words)
                     
-                    # First chunk: 2 words to synthesize audio as fast as possible. Later chunks: use configured min words.
-                    limit = 2 if is_first_chunk else voice_cfg.TTS_CHUNK_WORD_MIN
+                    # First chunk: 2 words to get the fastest possible response time (lowest latency).
+                    # Later chunks: 8 words to maintain continuous phrasing and stable pitch.
+                    # We also split on punctuation (commas, periods, etc.) for natural pauses.
+                    limit = 2 if is_first_chunk else 8
                     
-                    if word_count >= limit or ends_with_punctuation(word):
+                    if ends_with_punctuation(word) or word_count >= limit:
                         submit_chunk(" ".join(words))
                         words = []
                         is_first_chunk = False
