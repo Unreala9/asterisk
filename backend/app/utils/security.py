@@ -5,8 +5,10 @@ from cryptography.fernet import Fernet
 from app.core.config import settings
 
 def _get_encryption_key() -> str:
-    # Use SIP_ENCRYPTION_KEY if set, otherwise derive key from SUPABASE_JWT_SECRET
-    key_str = os.getenv("SIP_ENCRYPTION_KEY") or settings.supabase_jwt_secret or "fallback_secret_key_for_sip_encryption"
+    # Require SIP_ENCRYPTION_KEY env variable only
+    key_str = os.getenv("SIP_ENCRYPTION_KEY")
+    if not key_str:
+        raise ValueError("SIP_ENCRYPTION_KEY env variable is required but not set")
     # Fernet requires a 32-byte urlsafe base64-encoded key. We hash the secret key to get 32 bytes.
     hashed = hashlib.sha256(key_str.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(hashed).decode("utf-8")
