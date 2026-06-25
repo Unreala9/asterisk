@@ -88,7 +88,8 @@ class CallSessionManager:
                             "agent_system_prompt": agent.get("agent_system_prompt") or "",
                             "system_prompt": agent.get("system_prompt") or "",
                             "knowledge_base": agent.get("knowledge_base") or "",
-                            "voice_gender": kb_meta.get("voice_gender") or "female"
+                            "voice_gender": kb_meta.get("voice_gender") or "female",
+                            "voice_speed": agent.get("voice_speed"),
                         }
                         logger.info(f"[CallSessionManager] Loaded agent config for call {call_uuid}")
                 except Exception as e:

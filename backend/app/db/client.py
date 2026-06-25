@@ -31,12 +31,23 @@ def fetch_agent_with_context(db: Client, agent_id: str) -> dict:
             context = context_res.data[0]
             if context.get("knowledge_base") is not None:
                 agent["knowledge_base"] = context["knowledge_base"]
-            if context.get("agent_system_prompt") is not None:
-                agent["agent_system_prompt"] = context["agent_system_prompt"]
+            
+            # Primary: Use agent_system_prompt from agent_contexts if not empty/null
+            agent_sys_prompt = context.get("agent_system_prompt")
+            if agent_sys_prompt is not None and agent_sys_prompt.strip() != "":
+                agent["agent_system_prompt"] = agent_sys_prompt
+            else:
+                # Fallback: Use system_prompt from agents table
+                agent["agent_system_prompt"] = agent.get("system_prompt") or ""
+        else:
+            # Fallback: Use system_prompt from agents table if no context row exists
+            agent["agent_system_prompt"] = agent.get("system_prompt") or ""
     except Exception as e:
         # Robust fallback: log error but keep the original values
         import logging
         logging.getLogger(__name__).warning(f"Error querying agent_contexts for agent {agent_id}: {e}")
+        # On error, default to system_prompt from agents table as fallback
+        agent["agent_system_prompt"] = agent.get("system_prompt") or ""
         
     return agent
 
@@ -61,11 +72,22 @@ def fetch_workspace_agents_with_context(db: Client, workspace_id: str) -> list:
                 context = contexts_by_agent_id[agent_id]
                 if context.get("knowledge_base") is not None:
                     agent["knowledge_base"] = context["knowledge_base"]
-                if context.get("agent_system_prompt") is not None:
-                    agent["agent_system_prompt"] = context["agent_system_prompt"]
+                
+                # Primary: Use agent_system_prompt from agent_contexts if not empty/null
+                agent_sys_prompt = context.get("agent_system_prompt")
+                if agent_sys_prompt is not None and agent_sys_prompt.strip() != "":
+                    agent["agent_system_prompt"] = agent_sys_prompt
+                else:
+                    # Fallback: Use system_prompt from agents table
+                    agent["agent_system_prompt"] = agent.get("system_prompt") or ""
+            else:
+                # Fallback: Use system_prompt from agents table if no context row exists
+                agent["agent_system_prompt"] = agent.get("system_prompt") or ""
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Error batch-querying agent_contexts for workspace {workspace_id}: {e}")
+        for agent in agents:
+            agent["agent_system_prompt"] = agent.get("system_prompt") or ""
         
     return agents
 

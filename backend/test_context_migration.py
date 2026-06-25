@@ -44,7 +44,7 @@ def main():
         # It should fall back to values from the agents table since agent_contexts doesn't have a record
         fetched_agent = fetch_agent_with_context(db, agent_id)
         assert fetched_agent.get("knowledge_base") == "Fallback KB Content in agents table", "Fallback for knowledge_base failed!"
-        assert fetched_agent.get("agent_system_prompt") == "Fallback System Prompt in agents table", "Fallback for agent_system_prompt failed!"
+        assert fetched_agent.get("agent_system_prompt") == "Fallback Compiled System Prompt", "Fallback for agent_system_prompt failed!"
         print("Success: Fallback verification passed! Loaded values from 'agents' table correctly.")
         
         # 3. Test Save Context: Save new context values into agent_contexts table

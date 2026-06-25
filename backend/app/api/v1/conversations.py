@@ -125,7 +125,8 @@ async def agent_ask(
             text=no_input_msg,
             tts_provider=tts_provider,
             language=language,
-            voice_gender=voice_gender
+            voice_gender=voice_gender,
+            voice_speed=agent.get("voice_speed")
         )
         return {
             "stt": "", "answer": no_input_msg,
@@ -161,7 +162,8 @@ async def agent_ask(
         text=answer,
         tts_provider=tts_provider,
         language=language,
-        voice_gender=voice_gender
+        voice_gender=voice_gender,
+        voice_speed=agent.get("voice_speed")
     )
 
     # 7. Persistence
@@ -196,7 +198,8 @@ async def _tts_b64(
     text: str,
     tts_provider: str = "deepgram",
     language: str = "en-US",
-    voice_gender: Optional[str] = None
+    voice_gender: Optional[str] = None,
+    voice_speed: Optional[float] = None
 ) -> str:
     from app.services.tts_router import route_tts
     routed_provider = route_tts(text, tts_provider, language, voice_id)
@@ -208,11 +211,14 @@ async def _tts_b64(
             from app.api.v1.webhooks import _map_sarvam_speaker
             speaker = _map_sarvam_speaker(voice_id, voice_gender)
             sarvam_lang = "en-IN" if language.lower().startswith("en") else "hi-IN"
+            speed = float(voice_speed or 0.95)
+            speed = max(0.5, min(2.0, speed))
             audio_bytes = await sarvam.convert_text_to_speech(
                 text=text,
                 speaker=speaker,
                 language=sarvam_lang,
-                output_audio_codec="mp3"
+                output_audio_codec="mp3",
+                pace=speed
             )
         else:
             tts = _get_tts()
