@@ -194,8 +194,43 @@ export function SIPTrunksPage() {
   // Handle trunk creation wizard submit
   const handleWizardSubmit = async () => {
     if (!workspaceId || !authHeaders) return
+
+    // Validations
+    if (!wizardData.name || wizardData.name.trim().length < 3) {
+      toast.error("Trunk name must be at least 3 characters")
+      return
+    }
+    const domainRegex = /^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]))*$/
+    const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/
+    if (!wizardData.sip_proxy || (!domainRegex.test(wizardData.sip_proxy) && !ipRegex.test(wizardData.sip_proxy))) {
+      toast.error("SIP proxy must be a valid domain name or IP address")
+      return
+    }
+    if (wizardData.auth_type === 'username_password') {
+      if (!wizardData.username || wizardData.username.trim() === '') {
+        toast.error("SIP Username is required")
+        return
+      }
+      if (!wizardData.password || wizardData.password.trim() === '') {
+        toast.error("SIP Password is required")
+        return
+      }
+    }
+    if (wizardData.auth_type === 'ip_auth') {
+      if (!wizardData.provider_ips || wizardData.provider_ips.trim() === '') {
+        toast.error("Authorized provider IPs are required for IP Authentication")
+        return
+      }
+      const ips = wizardData.provider_ips.split(',').map((ip: string) => ip.trim())
+      for (const ip of ips) {
+        if (!ipRegex.test(ip)) {
+          toast.error(`Invalid IP address: ${ip}`)
+          return
+        }
+      }
+    }
+
     try {
-      // 1. Create SIP Trunk
       const providerIpsArray = wizardData.provider_ips
         ? wizardData.provider_ips.split(',').map((ip: string) => ip.trim())
         : []
@@ -214,6 +249,7 @@ export function SIPTrunksPage() {
         outbound_caller_id: wizardData.outbound_caller_id || null,
         max_concurrent_calls: parseInt(wizardData.max_concurrent_calls)
       }
+
 
       const res = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/sip-trunks`, {
         method: "POST",
@@ -667,6 +703,41 @@ export function SIPTrunksPage() {
                         <Button
                           onClick={async () => {
                             if (!workspaceId || !authHeaders || !activeTrunk) return
+
+                            // Validations
+                            if (!activeTrunk.name || activeTrunk.name.trim().length < 3) {
+                              toast.error("Trunk name must be at least 3 characters")
+                              return
+                            }
+                            const domainRegex = /^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]))*$/
+                            const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/
+                            if (!activeTrunk.sip_proxy || (!domainRegex.test(activeTrunk.sip_proxy) && !ipRegex.test(activeTrunk.sip_proxy))) {
+                              toast.error("SIP proxy must be a valid domain name or IP address")
+                              return
+                            }
+                            if (activeTrunk.auth_type === 'username_password') {
+                              if (!activeTrunk.username || activeTrunk.username.trim() === '') {
+                                toast.error("SIP Username is required")
+                                return
+                              }
+                            }
+                            if (activeTrunk.auth_type === 'ip_auth') {
+                              const rawIps = typeof activeTrunk.provider_ips === 'string'
+                                ? activeTrunk.provider_ips
+                                : (Array.isArray(activeTrunk.provider_ips) ? activeTrunk.provider_ips.join(', ') : '')
+                              if (!rawIps || rawIps.trim() === '') {
+                                toast.error("Authorized provider IPs are required for IP Authentication")
+                                return
+                              }
+                              const ips = rawIps.split(',').map((ip: string) => ip.trim())
+                              for (const ip of ips) {
+                                if (!ipRegex.test(ip)) {
+                                  toast.error(`Invalid IP address: ${ip}`)
+                                  return
+                                }
+                              }
+                            }
+
                             try {
                               const providerIpsVal = activeTrunk.auth_type === 'ip_auth'
                                 ? (typeof activeTrunk.provider_ips === 'string'
@@ -1040,15 +1111,46 @@ export function SIPTrunksPage() {
                 >
                   Cancel
                 </Button>
-                {wizardStep < 4 ? (
-                  <Button
-                    onClick={() => {
-                      if (wizardStep === 2 && !wizardData.sip_proxy) {
-                        toast.error("SIP proxy host is required")
-                        return
-                      }
-                      setWizardStep(wizardStep + 1)
-                    }}
+                 {wizardStep < 4 ? (
+                   <Button
+                     onClick={() => {
+                       if (wizardStep === 2) {
+                         if (!wizardData.name || wizardData.name.trim().length < 3) {
+                           toast.error("Trunk name must be at least 3 characters")
+                           return
+                         }
+                         const domainRegex = /^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]))*$/
+                         const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/
+                         if (!wizardData.sip_proxy || (!domainRegex.test(wizardData.sip_proxy) && !ipRegex.test(wizardData.sip_proxy))) {
+                           toast.error("SIP proxy must be a valid domain name or IP address")
+                           return
+                         }
+                         if (wizardData.auth_type === 'username_password') {
+                           if (!wizardData.username || wizardData.username.trim() === '') {
+                             toast.error("SIP Username is required")
+                             return
+                           }
+                           if (!wizardData.password || wizardData.password.trim() === '') {
+                             toast.error("SIP Password is required")
+                             return
+                           }
+                         }
+                         if (wizardData.auth_type === 'ip_auth') {
+                           if (!wizardData.provider_ips || wizardData.provider_ips.trim() === '') {
+                             toast.error("Authorized provider IPs are required for IP Authentication")
+                             return
+                           }
+                           const ips = wizardData.provider_ips.split(',').map((ip: string) => ip.trim())
+                           for (const ip of ips) {
+                             if (!ipRegex.test(ip)) {
+                               toast.error(`Invalid IP address: ${ip}`)
+                               return
+                             }
+                           }
+                         }
+                       }
+                       setWizardStep(wizardStep + 1)
+                     }}
                     className="rounded-full h-10 px-5 text-xs bg-[#c5b0f4] text-black hover:bg-[#c5b0f4]/90"
                   >
                     Next

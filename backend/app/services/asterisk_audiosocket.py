@@ -618,8 +618,8 @@ class AsteriskAudioSocketServer:
                 await writer.wait_closed()
                 return
 
-            if len(call_uuid) != 36:
-                logger.error(f'[AudioSocket] Handshake payload length is {len(call_uuid)}, expected 36-byte UUID: {call_uuid}')
+            if not call_uuid or len(call_uuid) < 3:
+                logger.error(f'[AudioSocket] Handshake payload length is {len(call_uuid)}, invalid UUID/ID: {call_uuid}')
                 writer.close()
                 await writer.wait_closed()
                 return

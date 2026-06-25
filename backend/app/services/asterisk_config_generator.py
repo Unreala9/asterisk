@@ -31,23 +31,16 @@ class AsteriskConfigGenerator:
             except Exception:
                 provider_ips = [provider_ips]
 
-        codecs = trunk.get("allowed_codecs") or ["ulaw", "alaw"]
-        if isinstance(codecs, str):
-            import json
-            try:
-                codecs = json.loads(codecs)
-            except Exception:
-                codecs = ["ulaw", "alaw"]
-        
-        codecs_str = ",".join(codecs)
+        # Force codec safety: allow=ulaw,alaw only
+        codecs_str = "ulaw,alaw"
         webhook_secret = settings.asterisk_webhook_secret or "your_shared_webhook_secret"
         transport_name = f"transport-{transport}"
-
+ 
         # 1. PJSIP config generation
         pjsip_lines = [
             f"; === SIP Trunk: {name} (ID: {trunk_id}) ==="
         ]
-
+ 
         if auth_type == "ip_auth":
             # IP Auth Endpoint
             pjsip_lines.extend([
@@ -104,22 +97,56 @@ class AsteriskConfigGenerator:
                 f"server_uri=sip:{sip_proxy}:{sip_port}",
                 ""
             ])
-
+ 
         pjsip_conf = "\n".join(pjsip_lines)
-
+ 
         # 2. Extensions config generation
         ext_lines = [
             f"; === Inbound Routing for Provider: {name} (ID: {trunk_id}) ===",
             f"[from-provider-{trunk_id}]",
+            "",
+            "; 1. Match numeric extensions",
             "exten => _X.,1,NoOp(Incoming SIP call from ${CALLERID(num)} to ${EXTEN})",
-            " same => n,Answer()",
             " same => n,Set(CALL_UUID=${UNIQUEID})",
-            f" same => n,System(curl -s \"{settings.public_base_url or 'http://127.0.0.1:8010'}/api/webhooks/asterisk/inbound?caller_id=${{CALLERID(num)}}&dialed_number=${{EXTEN}}&call_uuid=${{CALL_UUID}}&provider=asterisk&secret={webhook_secret}\" >/dev/null 2>&1 &)",
+            " same => n,Set(RETRIES=0)",
+            f" same => n(try_curl_num),System(curl -s -m 2 \"{settings.public_base_url or 'http://127.0.0.1:8010'}/api/webhooks/asterisk/inbound?caller_id=${{CALLERID(num)}}&dialed_number=${{EXTEN}}&call_uuid=${{CALL_UUID}}&provider=asterisk&secret={webhook_secret}\")",
+            " same => n,GotoIf($[\"${SYSTEMSTATUS}\" = \"SUCCESS\"]?curl_ok_num)",
+            " same => n,Set(RETRIES=$[${RETRIES} + 1])",
+            " same => n,GotoIf($[${RETRIES} < 3]?try_curl_num)",
+            " same => n,System(echo \"[${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)}] Webhook failed for CALL_UUID ${CALL_UUID} caller ${CALLERID(num)} dialed ${EXTEN}\" >> /var/log/asterisk/webhook_fail.log)",
+            " same => n(curl_ok_num),Answer()",
+            " same => n,AudioSocket(${CALL_UUID},127.0.0.1:9092)",
+            " same => n,Hangup()",
+            "",
+            "; 2. Match numeric extensions with leading +",
+            "exten => _+X.,1,NoOp(Incoming SIP call from ${CALLERID(num)} to ${EXTEN})",
+            " same => n,Set(CALL_UUID=${UNIQUEID})",
+            " same => n,Set(RETRIES=0)",
+            f" same => n(try_curl_plus),System(curl -s -m 2 \"{settings.public_base_url or 'http://127.0.0.1:8010'}/api/webhooks/asterisk/inbound?caller_id=${{CALLERID(num)}}&dialed_number=${{EXTEN}}&call_uuid=${{CALL_UUID}}&provider=asterisk&secret={webhook_secret}\")",
+            " same => n,GotoIf($[\"${SYSTEMSTATUS}\" = \"SUCCESS\"]?curl_ok_plus)",
+            " same => n,Set(RETRIES=$[${RETRIES} + 1])",
+            " same => n,GotoIf($[${RETRIES} < 3]?try_curl_plus)",
+            " same => n,System(echo \"[${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)}] Webhook failed for CALL_UUID ${CALL_UUID} caller ${CALLERID(num)} dialed ${EXTEN}\" >> /var/log/asterisk/webhook_fail.log)",
+            " same => n(curl_ok_plus),Answer()",
+            " same => n,AudioSocket(${CALL_UUID},127.0.0.1:9092)",
+            " same => n,Hangup()",
+            "",
+            "; 3. Match s extension (default routing)",
+            "exten => s,1,NoOp(Incoming SIP call to s from ${CALLERID(num)})",
+            " same => n,Set(CALL_UUID=${UNIQUEID})",
+            " same => n,Set(RETRIES=0)",
+            f" same => n(try_curl_s),System(curl -s -m 2 \"{settings.public_base_url or 'http://127.0.0.1:8010'}/api/webhooks/asterisk/inbound?caller_id=${{CALLERID(num)}}&dialed_number=${{EXTEN}}&call_uuid=${{CALL_UUID}}&provider=asterisk&secret={webhook_secret}\")",
+            " same => n,GotoIf($[\"${SYSTEMSTATUS}\" = \"SUCCESS\"]?curl_ok_s)",
+            " same => n,Set(RETRIES=$[${RETRIES} + 1])",
+            " same => n,GotoIf($[${RETRIES} < 3]?try_curl_s)",
+            " same => n,System(echo \"[${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)}] Webhook failed for CALL_UUID ${CALL_UUID} caller ${CALLERID(num)} dialed s\" >> /var/log/asterisk/webhook_fail.log)",
+            " same => n(curl_ok_s),Answer()",
             " same => n,AudioSocket(${CALL_UUID},127.0.0.1:9092)",
             " same => n,Hangup()",
             ""
         ]
         extensions_conf = "\n".join(ext_lines)
+
 
         # 3. Suggested firewall rules
         fw_rules = [

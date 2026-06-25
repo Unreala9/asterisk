@@ -1,3 +1,6 @@
+import os
+os.environ["SIP_ENCRYPTION_KEY"] = "test_sip_encryption_key_32_bytes_long_secret_phrase"
+
 import pytest
 import uuid
 from fastapi.testclient import TestClient
