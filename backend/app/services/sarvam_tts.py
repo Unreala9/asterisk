@@ -3,6 +3,7 @@ import base64
 import logging
 import audioop
 import json
+import re
 from typing import AsyncGenerator, Optional
 import aiohttp
 import websockets
@@ -11,6 +12,31 @@ from app.core.config import settings
 from app.services.tts_service import TTSService
 
 logger = logging.getLogger(__name__)
+
+def prepare_for_tts(text: str) -> str:
+    """
+    Preprocess text before sending to Sarvam TTS to improve naturalness:
+    - Replace all question marks (?) and exclamation marks (!) with periods (.)
+    - Collapse repeated punctuation (e.g. consecutive periods or commas)
+    - Normalize whitespace
+    - Remove duplicate punctuation sequences
+    """
+    if not text:
+        return text
+    
+    # 1. Replace all question marks (?) and exclamation marks (!) with periods (.)
+    processed = text.replace('?', '.').replace('!', '.')
+    
+    # 2. Collapse repeated/duplicate periods (including spaces between them) to a single period
+    processed = re.sub(r'\.[\s\.]*\.', '.', processed)
+    
+    # 3. Collapse repeated/duplicate commas
+    processed = re.sub(r',[\s,]*,', ',', processed)
+    
+    # 4. Normalize whitespace: collapse multiple spaces/tabs/newlines to a single space
+    processed = re.sub(r'\s+', ' ', processed)
+    
+    return processed.strip()
 
 SARVAM_REST_URL = "https://api.sarvam.ai/text-to-speech"
 SARVAM_STREAM_URL = "https://api.sarvam.ai/text-to-speech/stream"
@@ -37,7 +63,8 @@ class SarvamTTSService:
         text: str,
         speaker: str = "shubh",
         language: str = "hi-IN",
-        output_audio_codec: str = "mp3"
+        output_audio_codec: str = "mp3",
+        pace: float = 1.0
     ) -> bytes:
         """
         Synthesize text to speech using Sarvam REST API.
@@ -46,6 +73,7 @@ class SarvamTTSService:
         If output_audio_codec is 'pcm', we request 'linear16' from Sarvam
         and resample from 24kHz to 16kHz.
         """
+        text = prepare_for_tts(text)
         if len(text) > 400:
             import re
             logger.info("Text is too long (%d chars) for Sarvam TTS. Splitting into smaller chunks.", len(text))
@@ -80,7 +108,8 @@ class SarvamTTSService:
                         text=chunk.strip(),
                         speaker=speaker,
                         language=language,
-                        output_audio_codec=output_audio_codec
+                        output_audio_codec=output_audio_codec,
+                        pace=pace
                     )
                     audio_segments.append(segment)
             return b"".join(audio_segments)
@@ -101,7 +130,8 @@ class SarvamTTSService:
             "target_language_code": language,
             "speaker": speaker,
             "model": "bulbul:v3",
-            "output_audio_codec": req_codec
+            "output_audio_codec": req_codec,
+            "pace": pace
         }
 
         if output_audio_codec == "pcm":
@@ -156,7 +186,8 @@ class SarvamTTSService:
         text: str,
         speaker: str = "shubh",
         language: str = "hi-IN",
-        output_audio_codec: str = "mp3"
+        output_audio_codec: str = "mp3",
+        pace: float = 1.0
     ) -> AsyncGenerator[bytes, None]:
         """
         Stream text to speech using Sarvam REST API by fully buffering the audio.
@@ -174,7 +205,8 @@ class SarvamTTSService:
                 text=text,
                 speaker=speaker,
                 language=language,
-                output_audio_codec=output_audio_codec
+                output_audio_codec=output_audio_codec,
+                pace=pace
             )
             
             # Yield it in small chunks to simulate streaming
@@ -225,13 +257,15 @@ class WarmSarvamConnection:
         speaker: str = "shubh",
         language: str = "hi-IN",
         model: str = "bulbul:v3",
-        output_audio_codec: str = "pcm"
+        output_audio_codec: str = "pcm",
+        pace: float = 1.0
     ):
         self.api_key = api_key
         self.speaker = speaker
         self.language = language
         self.model = model
         self.output_audio_codec = output_audio_codec
+        self.pace = pace
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
         self._lock = asyncio.Lock()
         self._connect_task: Optional[asyncio.Task] = None
@@ -263,7 +297,8 @@ class WarmSarvamConnection:
                             "target_language_code": self.language,
                             "speaker": self.speaker,
                             "model": self.model,
-                            "output_audio_codec": codec
+                            "output_audio_codec": codec,
+                            "pace": self.pace
                         }
                     }
                     if codec == "linear16":
@@ -280,6 +315,7 @@ class WarmSarvamConnection:
 
     async def speak(self, text: str) -> AsyncGenerator[bytes, None]:
         """Send text and yield audio bytes until flushed."""
+        text = prepare_for_tts(text)
         async with self._lock:
             if self._ws is None or self._ws.state != websockets.State.OPEN:
                 await self.connect()

@@ -121,6 +121,8 @@ async def create_agent(workspace_id: str, agent_data: Dict[str, Any], db: Client
         "fallback_message": fallback_message or None,
         "handoff_enabled": bool(webhook_url),
         "handoff_webhook_url": webhook_url or None,
+        "niche": agent_data.get("niche"),
+        "is_custom_niche": agent_data.get("is_custom_niche", False),
     }
 
     result = db.table("agents").insert(db_data).execute()
@@ -185,6 +187,12 @@ async def update_agent(workspace_id: str, agent_id: str, agent_data: Dict[str, A
 
     if "agent_system_prompt" in agent_data:
         update_payload["agent_system_prompt"] = agent_data["agent_system_prompt"]
+
+    if "niche" in agent_data:
+        update_payload["niche"] = agent_data["niche"]
+
+    if "is_custom_niche" in agent_data:
+        update_payload["is_custom_niche"] = agent_data["is_custom_niche"]
 
     if "allow_interruptions" in agent_data:
         update_payload["interrupt_enabled"] = agent_data["allow_interruptions"]

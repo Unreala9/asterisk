@@ -394,16 +394,20 @@ class VoiceSession:
         if early_provider == "sarvam":
             speaker = _map_sarvam_speaker(voice_id, self.config.get("voice_gender"))
             codec = "mulaw" if self.is_twilio else "pcm"
+            speed = float(self.config.get("voice_speed") or 0.95)
+            speed = max(0.5, min(2.0, speed))
             if (self.sarvam_tts_conn is None 
                 or self.sarvam_tts_conn.speaker != speaker 
-                or self.sarvam_tts_conn.output_audio_codec != codec):
+                or self.sarvam_tts_conn.output_audio_codec != codec
+                or getattr(self.sarvam_tts_conn, "pace", 1.0) != speed):
                 if self.sarvam_tts_conn:
                     asyncio.create_task(self.sarvam_tts_conn.close())
                 self.sarvam_tts_conn = WarmSarvamConnection(
                     api_key=settings.sarvam_api_key or "",
                     speaker=speaker,
                     language="hi-IN",
-                    output_audio_codec=codec
+                    output_audio_codec=codec,
+                    pace=speed
                 )
             logger.info("[PRE_WARM] Pre-warming Sarvam WS connection in the background...")
             asyncio.create_task(self.sarvam_tts_conn.connect())
@@ -718,8 +722,11 @@ class VoiceSession:
                     words.append(word)
                     word_count = len(words)
                     
-                    # First chunk: 2 words to synthesize audio as fast as possible. Later chunks: use configured min words.
-                    limit = 2 if is_first_chunk else voice_cfg.TTS_CHUNK_WORD_MIN
+                    limit = (
+                        voice_cfg.TTS_CHUNK_FIRST_WORD_MIN
+                        if is_first_chunk
+                        else voice_cfg.TTS_CHUNK_WORD_MIN
+                    )
                     
                     if word_count >= limit or ends_with_punctuation(word):
                         submit_chunk(" ".join(words))
@@ -817,6 +824,7 @@ async def voice_websocket(ws: WebSocket):
                     "system_prompt": agent.get("system_prompt") or "",
                     "knowledge_base": agent.get("knowledge_base") or "",
                     "voice_gender": kb_meta.get("voice_gender") or "female",
+                    "voice_speed": agent.get("voice_speed"),
                 }
                 logger.info(f"[AGENT_CONFIG] Loaded config for agent {agent_id}: model={session.config['model']}, lang={session.config['language']}, voice={session.config['voice_id']}, tts={session.config['tts_provider']}")
             else:

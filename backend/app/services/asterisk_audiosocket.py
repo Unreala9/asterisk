@@ -108,11 +108,14 @@ class AsteriskVoiceSession:
         if routed_provider == 'sarvam':
             from app.api.v1.voice_ws import _map_sarvam_speaker
             speaker = _map_sarvam_speaker(voice_id, self.config.get('voice_gender'))
+            speed = float(self.config.get('voice_speed') or 0.95)
+            speed = max(0.5, min(2.0, speed))
             self.sarvam_tts_conn = WarmSarvamConnection(
                 api_key=settings.sarvam_api_key or '',
                 speaker=speaker,
                 language='hi-IN',
-                output_audio_codec='pcm'
+                output_audio_codec='pcm',
+                pace=speed
             )
             logger.info('[AsteriskVoiceSession] Pre-warming Sarvam TTS WS for telephony...')
             asyncio.create_task(self.sarvam_tts_conn.connect())
@@ -307,11 +310,14 @@ class AsteriskVoiceSession:
                     if self.sarvam_tts_conn is None:
                         from app.api.v1.voice_ws import _map_sarvam_speaker
                         speaker = _map_sarvam_speaker(self.config.get('voice_id'), self.config.get('voice_gender'))
+                        speed = float(self.config.get('voice_speed') or 0.95)
+                        speed = max(0.5, min(2.0, speed))
                         self.sarvam_tts_conn = WarmSarvamConnection(
                             api_key=settings.sarvam_api_key or '',
                             speaker=speaker,
                             language='hi-IN',
-                            output_audio_codec='pcm'
+                            output_audio_codec='pcm',
+                            pace=speed
                         )
                         await self.sarvam_tts_conn.connect()
 
@@ -405,7 +411,11 @@ class AsteriskVoiceSession:
 
                 for word in completed_words:
                     words.append(word)
-                    limit = 2 if is_first_chunk else voice_cfg.TTS_CHUNK_WORD_MIN
+                    limit = (
+                        voice_cfg.TTS_CHUNK_FIRST_WORD_MIN
+                        if is_first_chunk
+                        else voice_cfg.TTS_CHUNK_WORD_MIN
+                    )
                     if len(words) >= limit or ends_with_punctuation(word):
                         submit_chunk(' '.join(words))
                         words = []

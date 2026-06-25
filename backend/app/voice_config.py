@@ -21,7 +21,8 @@ class VoiceConfig(BaseSettings):
     )
 
     # TTS chunking
-    TTS_CHUNK_WORD_MIN: int = 6            # min words before sending to TTS
+    TTS_CHUNK_FIRST_WORD_MIN: int = 4
+    TTS_CHUNK_WORD_MIN: int = 12            # min words before sending to TTS
     TTS_CHUNK_TIMEOUT_MS: int = 400        # max wait before forcing a chunk
 
     model_config = {
