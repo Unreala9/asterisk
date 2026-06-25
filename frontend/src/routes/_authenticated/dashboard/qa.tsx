@@ -158,7 +158,8 @@ function AgentPlaygroundPage() {
       if (!agentRes.ok) return;
       const agent = await agentRes.json();
       if (agent.name) setAgentName(agent.name);
-      if (agent.system_prompt) setSystemPrompt(agent.system_prompt);
+      const displayPrompt = agent.agent_system_prompt || agent.system_prompt || "";
+      setSystemPrompt(displayPrompt);
       if (agent.knowledge_base) setAgentKnowledgeBase(agent.knowledge_base);
       if (agent.voice_id) setSelectedVoice(agent.voice_id);
       if (agent.language) setSelectedLanguage(agent.language);

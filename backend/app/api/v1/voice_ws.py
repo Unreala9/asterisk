@@ -326,12 +326,16 @@ class VoiceSession:
         base = (self.config.get("agent_system_prompt") or self.config.get("system_prompt") or "You are a helpful voice assistant.").strip()
         kb = (self.config.get("knowledge_base") or "").strip()
         
-        # Get resolved voice gender
+        # Get resolved voice gender and language settings
         voice_id = self.config.get("voice_id")
         voice_gender = self.config.get("voice_gender")
         from app.utils.post_processor import detect_voice_gender
         gender = voice_gender.lower() if voice_gender else detect_voice_gender(voice_id)
         
+        # Determine language (Hinglish/English vs pure Hindi)
+        language = (self.config.get("language") or "en-US").lower()
+        is_hindi = language.startswith("hi") or (self.config.get("tts_provider") == "sarvam")
+
         # Swap the Voice Agent Persona block dynamically to match the current gender
         if "--- Voice Agent Persona ---" in base:
             parts = base.split("--- Voice Agent Persona ---")
@@ -340,18 +344,33 @@ class VoiceSession:
             base = f"{header}\n\n{persona_block}"
         else:
             # Fallback override if the block is not structured
-            if gender == "male":
-                base += "\n\nOVERRIDE: You are a male Indian voice assistant. Use male Hinglish grammar rules: 'sakta hoon', 'gaya', 'leta hoon', 'deta hoon'. Do NOT use female phrases."
+            if is_hindi:
+                if gender == "male":
+                    base += "\n\nOVERRIDE: आप एक पुरुष (male) भारतीय वॉयस असिस्टेंट हैं। बातचीत में पुल्लिंग हिंदी व्याकरण नियमों का उपयोग करें, जैसे: 'सकता हूँ', 'गया', 'लेता हूँ', 'देता हूँ'। स्त्रीलिंग शब्द या क्रियाओं का उपयोग न करें।"
+                else:
+                    base += "\n\nOVERRIDE: आप एक महिला (female) भारतीय वॉयस असिस्टेंट हैं। बातचीत में स्त्रीलिंग हिंदी व्याकरण नियमों का उपयोग करें, जैसे: 'सकती हूँ', 'गई', 'लेती हूँ', 'देती हूँ'। पुल्लिंग शब्द या क्रियाओं का उपयोग न करें।"
             else:
-                base += "\n\nOVERRIDE: You are a female Indian voice assistant. Use female Hinglish grammar rules: 'sakti hoon', 'gayi', 'leti hoon', 'deti hoon'. Do NOT use male phrases."
+                if gender == "male":
+                    base += "\n\nOVERRIDE: You are a male Indian voice assistant. Use male Hinglish grammar rules: 'sakta hoon', 'gaya', 'leta hoon', 'deta hoon'. Do NOT use female phrases."
+                else:
+                    base += "\n\nOVERRIDE: You are a female Indian voice assistant. Use female Hinglish grammar rules: 'sakti hoon', 'gayi', 'leti hoon', 'deti hoon'. Do NOT use male phrases."
 
-        # Strict prompt instructions for short natural Hinglish replies
-        voice_prefix = (
-            "You are a real-time voice assistant. You MUST answer in short Hinglish. "
-            "Maximum response length: 1–2 sentences. Avoid long explanations. "
-            "Use natural spoken language. Never generate paragraphs for voice calls. "
-            "Keep replies brief, direct, and conversational."
-        )
+        # Strict prompt instructions based on the selected language
+        if is_hindi:
+            voice_prefix = (
+                "You are a real-time voice assistant. You MUST answer in short, natural Hindi (Devanagari script). "
+                "Do NOT use Roman Hinglish. Speak and reply using clean, conversational Hindi. "
+                "Maximum response length: 1–2 sentences. Avoid long explanations. "
+                "Keep replies brief, direct, and conversational."
+            )
+        else:
+            voice_prefix = (
+                "You are a real-time voice assistant. You MUST answer in short Hinglish. "
+                "Maximum response length: 1–2 sentences. Avoid long explanations. "
+                "Use natural spoken language. Never generate paragraphs for voice calls. "
+                "Keep replies brief, direct, and conversational."
+            )
+
         full = f"{voice_prefix}\n\n{base}"
         if kb:
             full += f"\n\nKnowledge base:\n{kb}"
@@ -394,16 +413,20 @@ class VoiceSession:
         if early_provider == "sarvam":
             speaker = _map_sarvam_speaker(voice_id, self.config.get("voice_gender"))
             codec = "mulaw" if self.is_twilio else "pcm"
+            speed = float(self.config.get("voice_speed") or 0.95)
+            speed = max(0.5, min(2.0, speed))
             if (self.sarvam_tts_conn is None 
                 or self.sarvam_tts_conn.speaker != speaker 
-                or self.sarvam_tts_conn.output_audio_codec != codec):
+                or self.sarvam_tts_conn.output_audio_codec != codec
+                or getattr(self.sarvam_tts_conn, "pace", 1.0) != speed):
                 if self.sarvam_tts_conn:
                     asyncio.create_task(self.sarvam_tts_conn.close())
                 self.sarvam_tts_conn = WarmSarvamConnection(
                     api_key=settings.sarvam_api_key or "",
                     speaker=speaker,
                     language="hi-IN",
-                    output_audio_codec=codec
+                    output_audio_codec=codec,
+                    pace=speed
                 )
             logger.info("[PRE_WARM] Pre-warming Sarvam WS connection in the background...")
             asyncio.create_task(self.sarvam_tts_conn.connect())
@@ -690,7 +713,8 @@ class VoiceSession:
             )
 
             def ends_with_punctuation(w: str) -> bool:
-                return len(w) > 0 and w[-1] in (".", "!", "?", "।")
+                # Split on sentence or clause boundaries for natural phrasing and stable intonation
+                return len(w) > 0 and w[-1] in (".", "!", "?", "।", ",", ";", ":")
 
             async for token in llm_stream:
                 if self.barge_in_event.is_set():
@@ -718,10 +742,12 @@ class VoiceSession:
                     words.append(word)
                     word_count = len(words)
                     
-                    # First chunk: 2 words to synthesize audio as fast as possible. Later chunks: use configured min words.
-                    limit = 2 if is_first_chunk else voice_cfg.TTS_CHUNK_WORD_MIN
+                    # First chunk: 2 words to get the fastest possible response time (lowest latency).
+                    # Later chunks: 8 words to maintain continuous phrasing and stable pitch.
+                    # We also split on punctuation (commas, periods, etc.) for natural pauses.
+                    limit = 2 if is_first_chunk else 8
                     
-                    if word_count >= limit or ends_with_punctuation(word):
+                    if ends_with_punctuation(word) or word_count >= limit:
                         submit_chunk(" ".join(words))
                         words = []
                         is_first_chunk = False
@@ -817,6 +843,7 @@ async def voice_websocket(ws: WebSocket):
                     "system_prompt": agent.get("system_prompt") or "",
                     "knowledge_base": agent.get("knowledge_base") or "",
                     "voice_gender": kb_meta.get("voice_gender") or "female",
+                    "voice_speed": agent.get("voice_speed"),
                 }
                 logger.info(f"[AGENT_CONFIG] Loaded config for agent {agent_id}: model={session.config['model']}, lang={session.config['language']}, voice={session.config['voice_id']}, tts={session.config['tts_provider']}")
             else:

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Navbar } from "@/components/site/Navbar";
 import { Footer } from "@/components/site/Footer";
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, hubSupabase } from "@/lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import {
   Phone,
@@ -88,6 +88,38 @@ gsap.registerPlugin(ScrollTrigger);
 
 function HomePage() {
   const [session, setSession] = useState<Session | null>(null);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(true);
+
+  const formatPlanLabel = (name: string) => {
+    return name
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  useEffect(() => {
+    async function fetchPlans() {
+      try {
+        const { data, error } = await hubSupabase
+          .from("pricing_plans")
+          .select("*")
+          .eq("is_active", true)
+          .eq("category", "calling");
+
+        if (error) throw error;
+        if (data) {
+          // Sort them by amount
+          const sorted = [...data].sort((a, b) => Number(a.amount || 0) - Number(b.amount || 0));
+          setPlans(sorted);
+        }
+      } catch (err) {
+        console.error("Error fetching pricing plans:", err);
+      } finally {
+        setIsLoadingPlans(false);
+      }
+    }
+    fetchPlans();
+  }, []);
   const videoRef = useRef<HTMLVideoElement>(null);
   const successSectionRef = useRef<HTMLDivElement>(null);
 
@@ -397,74 +429,7 @@ function HomePage() {
           </div>
         </section>
 
-        {/* ═══════════════════════════════════════════════
-            STATS — NAVY color block
-        ═══════════════════════════════════════════════ */}
-        <section className="mx-auto max-w-[1200px] mb-24 px-4 md:px-6">
-          <div
-            style={{
-              background: "#1f1d3d",
-              borderRadius: 24,
-              padding: "clamp(40px, 8vw, 64px) clamp(24px, 5vw, 48px)",
-              color: "#ffffff",
-            }}
-          >
-            <p style={{ ...eyebrowStyle, color: "rgba(255,255,255,0.45)" }}>BY THE NUMBERS</p>
-            <h2 style={{ fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 340, letterSpacing: "-0.02em", lineHeight: 1.1, marginBottom: 56, maxWidth: 480 }}>
-              Trusted by teams shipping at scale.
-            </h2>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 48 }}>
-              {[
-                { n: "2M+", label: "Calls Handled" },
-                { n: "99.8%", label: "Uptime SLA" },
-                { n: "<100ms", label: "Response Latency" },
-                { n: "40+", label: "CRM Integrations" },
-              ].map((stat, i) => (
-                <div key={i}>
-                  <div style={{ fontSize: "clamp(36px, 4vw, 56px)", fontWeight: 340, letterSpacing: "-0.02em", marginBottom: 8 }}>{stat.n}</div>
-                  <div style={{ fontSize: 15, fontFamily: "monospace", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.50)" }}>{stat.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════════
-            DEVELOPER — CORAL color block
-        ═══════════════════════════════════════════════ */}
-        <section className="mx-auto max-w-[1200px] mb-24 px-4 md:px-6">
-          <div className="bg-[#f3c9b6] rounded-[24px] py-12 px-6 md:py-16 md:px-12">
-            <p style={{ ...eyebrowStyle, color: "#8b4f35" }}>FOR DEVELOPERS</p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 32, alignItems: "center" }}>
-              <div style={{ flex: "1 1 340px" }}>
-                <h2 style={{ ...displayLgStyle, marginBottom: 24, maxWidth: 440 }}>
-                  Build with APIs that make sense.
-                </h2>
-                <p style={{ fontSize: 18, fontWeight: 320, lineHeight: 1.55, color: "#542a17", marginBottom: 32 }}>
-                  Integrate voice capabilities directly into your application with our robust REST and WebSocket APIs. No complex telecom knowledge required.
-                </p>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  <span style={{ background: "rgba(255,255,255,0.4)", padding: "8px 16px", borderRadius: 9999, fontSize: 14, fontWeight: 540 }}>Node.js</span>
-                  <span style={{ background: "rgba(255,255,255,0.4)", padding: "8px 16px", borderRadius: 9999, fontSize: 14, fontWeight: 540 }}>Python</span>
-                  <span style={{ background: "rgba(255,255,255,0.4)", padding: "8px 16px", borderRadius: 9999, fontSize: 14, fontWeight: 540 }}>Go</span>
-                  <span style={{ background: "rgba(255,255,255,0.4)", padding: "8px 16px", borderRadius: 9999, fontSize: 14, fontWeight: 540 }}>Webhooks</span>
-                </div>
-              </div>
-              <div style={{ flex: "1 1 400px", background: "#1e1e1e", padding: 32, borderRadius: 16, color: "#d4d4d4", fontFamily: "'JetBrains Mono', 'SF Mono', monospace", fontSize: 13, lineHeight: 1.6, overflowX: "auto" }}>
-                <span style={{ color: "#569cd6" }}>const</span> client <span style={{ color: "#d4d4d4" }}>=</span> <span style={{ color: "#569cd6" }}>new</span> <span style={{ color: "#4ec9b0" }}>GAPVoicePilot</span>(<span style={{ color: "#ce9178" }}>'api_key'</span>);<br /><br />
-                <span style={{ color: "#569cd6" }}>await</span> client.<span style={{ color: "#dcdcaa" }}>calls</span>.<span style={{ color: "#dcdcaa" }}>create</span>({`{`}<br />
-                &nbsp;&nbsp;agent_id: <span style={{ color: "#ce9178" }}>'agt_123'</span>,<br />
-                &nbsp;&nbsp;to: <span style={{ color: "#ce9178" }}>'+15550100'</span>,<br />
-                &nbsp;&nbsp;context: {`{`}<br />
-                &nbsp;&nbsp;&nbsp;&nbsp;name: <span style={{ color: "#ce9178" }}>'Alice'</span>,<br />
-                &nbsp;&nbsp;&nbsp;&nbsp;topic: <span style={{ color: "#ce9178" }}>'renewal'</span><br />
-                &nbsp;&nbsp;{`}`}<br />
-                {`}`});
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* ═══════════════════════════════════════════════
             TEMPLATES — WHITE canvas
@@ -637,11 +602,18 @@ function HomePage() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
-              {[
-                { name: "Basic", price: "$49", period: "/mo", features: ["500 minutes", "1 Agent", "Basic Analytics"] },
-                { name: "Pro", price: "$199", period: "/mo", features: ["5,000 minutes", "5 Agents", "CRM Integrations", "Priority Support"], highlight: true },
-                { name: "Enterprise", price: "Custom", period: "", features: ["Unlimited minutes", "Unlimited Agents", "Dedicated Server", "24/7 SLA"] },
-              ].map((tier, i) => (
+              {(plans.length > 0 ? plans.map(p => ({
+                name: p.plan_label || formatPlanLabel(p.plan_name),
+                price: p.currency === "INR" ? `₹${(p.amount / 100).toLocaleString()}` : `$${(p.amount / 100).toLocaleString()}`,
+                period: p.duration === "monthly" ? "/mo" : p.duration === "yearly" ? "/yr" : `/${p.duration}`,
+                features: p.features || [],
+                highlight: p.is_popular,
+                isEnterprise: p.plan_name.toLowerCase().includes("enterprise") || p.plan_name.toLowerCase().includes("elite")
+              })) : [
+                { name: "Basic", price: "$49", period: "/mo", features: ["500 minutes", "1 Agent", "Basic Analytics"], highlight: false, isEnterprise: false },
+                { name: "Pro", price: "$199", period: "/mo", features: ["5,000 minutes", "5 Agents", "CRM Integrations", "Priority Support"], highlight: true, isEnterprise: false },
+                { name: "Enterprise", price: "Custom", period: "", features: ["Unlimited minutes", "Unlimited Agents", "Dedicated Server", "24/7 SLA"], highlight: false, isEnterprise: true },
+              ]).map((tier, i) => (
                 <div
                   key={i}
                   style={{
@@ -679,7 +651,7 @@ function HomePage() {
                       textDecoration: "none",
                     }}
                   >
-                    {tier.name === "Enterprise" ? "Contact Sales" : "Get Started"}
+                    {tier.isEnterprise ? "Contact Sales" : "Get Started"}
                   </Link>
                 </div>
               ))}

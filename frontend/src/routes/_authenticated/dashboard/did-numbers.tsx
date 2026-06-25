@@ -57,7 +57,7 @@ export function DidNumbersPage() {
   const [linkAgentId, setLinkAgentId] = useState<string>('')
   const [linkLoading, setLinkLoading] = useState(false)
 
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000"
+  const apiUrl = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "")
 
   const fetchData = useCallback(async (wsId: string, headers: Record<string, string>) => {
     const [didRes, trunkRes, agentRes] = await Promise.all([

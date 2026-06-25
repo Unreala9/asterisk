@@ -105,6 +105,9 @@ const formSchema = z.object({
   // Step 2: General Business Information
   businessName: z.string().min(2, "Business name is required"),
   industry: z.string().min(2, "Industry is required"),
+  agent_system_prompt: z.string().optional(),
+  niche: z.string().optional(),
+  is_custom_niche: z.boolean().optional(),
   businessDescription: z.string().min(10, "Describe what your business does (at least 10 chars)"),
   businessAddress: z.string().optional(),
   websiteUrl: z.string().url("Must be a valid URL starting with https://").or(z.literal("")).optional(),
@@ -248,6 +251,9 @@ function CreateAgentPage() {
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [availablePhoneNumbers, setAvailablePhoneNumbers] = useState<any[]>([])
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+  const [niches, setNiches] = useState<string[]>([]);
+  const [selectedNicheOption, setSelectedNicheOption] = useState<string>("");
+  const [customNiche, setCustomNiche] = useState<string>("");
   const ttsUserChangedRef = useRef(false)
   const stepContainerRef = useRef<HTMLDivElement>(null)
   const progressBarRef = useRef<HTMLDivElement>(null)
@@ -266,6 +272,9 @@ function CreateAgentPage() {
 
       businessName: "",
       industry: "",
+      agent_system_prompt: "",
+      niche: "",
+      is_custom_niche: false,
       businessDescription: "",
       businessAddress: "",
       websiteUrl: "",
@@ -346,12 +355,26 @@ function CreateAgentPage() {
   useEffect(() => {
     async function init() {
       try {
+        // Fetch niches list from niche_system_prompts table
+        const { data: nichesData, error: nichesError } = await supabase
+          .from("niche_system_prompts")
+          .select("niche_name")
+          .order("niche_name", { ascending: true });
+        
+        let fetchedNiches: string[] = [];
+        if (nichesError) {
+          console.error("Error fetching niches:", nichesError);
+        } else if (nichesData) {
+          fetchedNiches = nichesData.map((d: any) => d.niche_name).filter(Boolean);
+          setNiches(fetchedNiches);
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           setIsInitialLoading(false);
           return;
         }
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, "");
         const headers = {
           'Authorization': `Bearer ${session.access_token}`,
           'ngrok-skip-browser-warning': 'true',
@@ -451,6 +474,9 @@ function CreateAgentPage() {
 
             businessName: kb.business_name || agent.name || "",
             industry: kb.industry || "",
+            agent_system_prompt: agent.agent_system_prompt || "",
+            niche: agent.niche || kb.industry || "",
+            is_custom_niche: agent.is_custom_niche || false,
             businessDescription: kb.business_description || "",
             businessAddress: kb.business_address || "",
             websiteUrl: kb.website_url || agent.kb_source_url || "",
@@ -484,6 +510,20 @@ function CreateAgentPage() {
             additionalInfo: kb.additional_info || "",
             finalNotes: kb.final_notes || "",
           });
+          // Set dropdown select and custom input state based on loaded industry
+          const loadedIndustry = kb.industry || agent.niche || "";
+          const isCustom = agent.is_custom_niche || false;
+          if (loadedIndustry) {
+            if (isCustom) {
+              setSelectedNicheOption("Other");
+              setCustomNiche(loadedIndustry);
+            } else if (fetchedNiches.includes(loadedIndustry)) {
+              setSelectedNicheOption(loadedIndustry);
+            } else {
+              setSelectedNicheOption("Other");
+              setCustomNiche(loadedIndustry);
+            }
+          }
         }
       } catch (err) {
         console.error("Init error:", err);
@@ -504,8 +544,7 @@ function CreateAgentPage() {
         setError("Not authenticated. Please log in again.")
         return
       }
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, "")
 
       // Map dynamic lists
       const cleanServicesProducts = (values.servicesProducts || []).filter(
@@ -587,11 +626,14 @@ function CreateAgentPage() {
         interrupt_enabled: values.allowInterruptions,
         kb_source_url: values.websiteUrl || null,
         system_prompt: compiledPrompt,
+        agent_system_prompt: values.agent_system_prompt,
         kb_metadata: kbMetadata,
         fallback_message: values.escalationPhone || null,
         tts_provider: values.ttsProvider,
         voice_gender: values.voiceGender,
         vad_latency: values.responseTiming,
+        niche: values.niche || values.industry || "",
+        is_custom_niche: selectedNicheOption === "Other",
       };
 
       let saveResult;
@@ -632,6 +674,42 @@ function CreateAgentPage() {
       setIsSubmitting(false)
     }
   }
+
+  const handleNicheChange = async (val: string) => {
+    setSelectedNicheOption(val);
+    if (val === "Other") {
+      form.setValue("industry", customNiche, { shouldValidate: true });
+      form.setValue("niche", customNiche, { shouldValidate: true });
+      form.setValue("is_custom_niche", true, { shouldValidate: true });
+    } else {
+      form.setValue("industry", val, { shouldValidate: true });
+      form.setValue("niche", val, { shouldValidate: true });
+      form.setValue("is_custom_niche", false, { shouldValidate: true });
+      try {
+        const { data, error } = await supabase
+          .from("niche_system_prompts")
+          .select("system_prompt")
+          .eq("niche_name", val)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error fetching niche system prompt:", error);
+        } else if (data?.system_prompt) {
+          form.setValue("agent_system_prompt", data.system_prompt, { shouldValidate: true });
+        }
+      } catch (err) {
+        console.error("Failed to fetch system prompt for niche:", err);
+      }
+    }
+  };
+
+  const handleCustomNicheChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setCustomNiche(val);
+    form.setValue("industry", val, { shouldValidate: true });
+    form.setValue("niche", val, { shouldValidate: true });
+    form.setValue("is_custom_niche", true, { shouldValidate: true });
+  };
 
   const watchedLanguage = form.watch("language");
   const watchedTts = form.watch("ttsProvider");
@@ -678,6 +756,41 @@ function CreateAgentPage() {
 
   const filteredVoices = watchedTts === "sarvam" ? SARVAM_VOICES : DEEPGRAM_VOICES;
 
+  const saveStep2DataDirectly = async () => {
+    if (!agentId) return;
+    const promptValue = form.getValues("agent_system_prompt") || "";
+    const nicheValue = form.getValues("niche") || form.getValues("industry") || "";
+    const isCustom = selectedNicheOption === "Other";
+    try {
+      const { error: contextError } = await supabase
+        .from("agent_contexts")
+        .upsert({
+          agent_id: agentId,
+          agent_system_prompt: promptValue
+        }, { onConflict: "agent_id" });
+      if (contextError) {
+        console.error("Failed to directly upsert agent_system_prompt:", contextError);
+      } else {
+        console.log("Successfully direct upserted agent_system_prompt to DB");
+      }
+
+      const { error: agentError } = await supabase
+        .from("agents")
+        .update({
+          niche: nicheValue,
+          is_custom_niche: isCustom
+        })
+        .eq("id", agentId);
+      if (agentError) {
+        console.error("Failed to directly update agent niche:", agentError);
+      } else {
+        console.log("Successfully direct updated agent niche to DB");
+      }
+    } catch (err) {
+      console.error("Error direct saving step 2 data:", err);
+    }
+  };
+
   const handleNext = async () => {
     let fieldsToValidate: any[] = [];
     if (currentStep === 1) {
@@ -698,6 +811,9 @@ function CreateAgentPage() {
     
     const isValid = await form.trigger(fieldsToValidate as any);
     if (isValid) {
+      if (currentStep === 2 && agentId) {
+        void saveStep2DataDirectly();
+      }
       setCurrentStep((prev) => Math.min(prev + 1, FORM_STEPS.length));
     } else {
       toast.error("Please fix the validation errors before moving forward.");
@@ -720,6 +836,9 @@ function CreateAgentPage() {
   const handleStepClick = async (stepId: number) => {
     const isValid = await form.trigger();
     if (isValid || stepId < currentStep) {
+      if (currentStep === 2 && stepId !== 2 && agentId) {
+        void saveStep2DataDirectly();
+      }
       setCurrentStep(stepId);
     } else {
       toast.error("Form has validation errors. Please resolve them first.");
@@ -871,40 +990,21 @@ function CreateAgentPage() {
                      </FormItem>
                    )} />
  
-                   <FormField control={form.control as any} name="voiceGender" render={({ field }) => (
-                     <FormItem className="space-y-2">
-                       <FormLabel className={LABEL}>Voice Gender</FormLabel>
-                       <Select onValueChange={field.onChange} value={field.value}>
-                         <FormControl>
-                           <SelectTrigger className={INPUT}>
-                             <SelectValue placeholder="Select gender" />
-                           </SelectTrigger>
-                         </FormControl>
-                         <SelectContent className="rounded-lg border-[#e6e6e6]">
-                           <SelectItem value="female">Female</SelectItem>
-                           <SelectItem value="male">Male</SelectItem>
-                         </SelectContent>
-                       </Select>
-                       <FormDescription className={DESC}>Enforces appropriate gender-specific grammar rules.</FormDescription>
-                       <FormMessage />
-                     </FormItem>
-                   )} />
- 
                    <FormField control={form.control as any} name="allowInterruptions" render={({ field }) => (
-                     <FormItem className="space-y-2 md:col-span-2">
-                       <FormLabel className={LABEL}>Allow Interruptions</FormLabel>
-                       <FormControl>
-                         <div className="flex h-10 items-center justify-between px-4 rounded-[10px] bg-[#f7f7f5] border border-transparent">
-                           <span className="text-[13px] font-medium text-black">
-                             {field.value ? "Enabled" : "Disabled"}
-                           </span>
-                           <Switch checked={field.value} onCheckedChange={field.onChange} className="scale-90" />
-                         </div>
-                       </FormControl>
-                       <FormDescription className={DESC}>Let callers speak mid-sentence.</FormDescription>
-                       <FormMessage />
-                     </FormItem>
-                   )} />
+                      <FormItem className="space-y-2">
+                        <FormLabel className={LABEL}>Allow Interruptions</FormLabel>
+                        <FormControl>
+                          <div className="flex h-11 items-center justify-between px-4 rounded-[12px] bg-[#f7f7f5] border border-transparent">
+                            <span className="text-[14px] font-[450] text-black">
+                              {field.value ? "Enabled" : "Disabled"}
+                            </span>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} className="scale-90" />
+                          </div>
+                        </FormControl>
+                        <FormDescription className={DESC}>Let callers speak mid-sentence.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
                  </div>
               </div>
             )}
@@ -919,7 +1019,54 @@ function CreateAgentPage() {
                 />
                 <div className="grid gap-5 md:grid-cols-2">
                   <FormInput label="Business Name" name="businessName" placeholder="Acme Corporation" form={form} />
-                  <FormInput label="Industry / Business Type" name="industry" placeholder="SaaS, E-commerce, Medical, etc." form={form} />
+                  
+                  <div className="flex flex-col gap-3">
+                    <FormField
+                      control={form.control as any}
+                      name="industry"
+                      render={({ field }) => (
+                        <FormItem className="space-y-2 flex flex-col">
+                          <FormLabel className={LABEL}>Industry / Business Type</FormLabel>
+                          <Select
+                            onValueChange={handleNicheChange}
+                            value={selectedNicheOption}
+                          >
+                            <FormControl>
+                              <SelectTrigger className={INPUT}>
+                                <SelectValue placeholder="Select industry / business type" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="rounded-lg border-[#e6e6e6]">
+                              {niches.map((nicheName) => (
+                                <SelectItem key={nicheName} value={nicheName}>
+                                  {nicheName}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="Other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    {selectedNicheOption === "Other" && (
+                      <div className="space-y-2 flex flex-col animate-in fade-in duration-200">
+                        <Label className={LABEL}>Specify Custom Business Type</Label>
+                        <Input
+                          placeholder="e.g. SaaS, E-commerce, Medical, etc."
+                          className={INPUT}
+                          value={customNiche}
+                          onChange={handleCustomNicheChange}
+                        />
+                        {form.formState.errors.industry?.message && (
+                          <span className="text-[11px] font-semibold text-rose-500 italic mt-1">
+                            {form.formState.errors.industry.message as string}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <FormTextarea 
                   label="What Does Your Business Do?" 

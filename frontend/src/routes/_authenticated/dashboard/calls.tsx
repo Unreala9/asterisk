@@ -52,7 +52,7 @@ function CallsPage() {
   const [authHeaders, setAuthHeaders] = useState<Record<string, string> | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const apiUrl = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
   useEffect(() => {
     async function init() {
