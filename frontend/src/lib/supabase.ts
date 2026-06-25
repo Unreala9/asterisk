@@ -12,3 +12,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null as any // Using 'any' to avoid breaking imports, but it will fail at runtime if used
+
+const hubUrl = import.meta.env.VITE_HUB_SUPABASE_URL
+const hubKey = import.meta.env.VITE_HUB_SUPABASE_ANON_KEY
+
+export const hubSupabase = (hubUrl && hubKey)
+  ? createClient(hubUrl, hubKey)
+  : supabase;
