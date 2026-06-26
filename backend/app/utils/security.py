@@ -6,7 +6,7 @@ from app.core.config import settings
 
 def _get_encryption_key() -> str:
     # Require SIP_ENCRYPTION_KEY env variable only
-    key_str = os.getenv("SIP_ENCRYPTION_KEY")
+    key_str = settings.sip_encryption_key or os.getenv("SIP_ENCRYPTION_KEY")
     if not key_str:
         raise ValueError("SIP_ENCRYPTION_KEY env variable is required but not set")
     # Fernet requires a 32-byte urlsafe base64-encoded key. We hash the secret key to get 32 bytes.

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     supabase_anon_key: str
     supabase_jwt_secret: str
     voice_pilot_sso_secret: Optional[str] = None
+    sip_encryption_key: Optional[str] = None
 
     
     # External APIs
