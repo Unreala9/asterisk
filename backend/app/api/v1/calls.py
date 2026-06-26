@@ -163,7 +163,7 @@ async def test_call(
         "agent_id": agent_id,
         "phone_number_id": pn_id,
         "caller_phone_number": to_number,
-        "twilio_call_sid": "pending",  # will be updated with actual SID below
+        "twilio_call_sid": f"pending-{call_id}",  # will be updated with actual SID below
         "direction": "outbound",
         "status": "ringing",
         "metadata": {"is_test": True, "provider": settings.telephony_provider}

@@ -172,10 +172,30 @@ async def list_sip_trunks(workspace_id: str, db: Client = Depends(get_db)):
 # --- Asterisk Automation and Sync Helpers ---
 
 def ensure_includes():
-    """Ensure pjsip.conf, pjsip_custom.conf and extensions.conf include our trunk custom files."""
+    """Ensure pjsip.conf, pjsip_custom.conf and extensions.conf include our trunk custom files, 
+    proper transports exist, and buggy unbound DNS module is disabled."""
     try:
         import os
         pjsip_paths = ["/etc/asterisk/pjsip.conf", "/etc/asterisk/pjsip_custom.conf"]
+        
+        # 1. Check if a transport-udp is defined anywhere
+        transport_defined = False
+        for path in pjsip_paths:
+            if os.path.exists(path):
+                with open(path, "r") as f:
+                    c = f.read()
+                if "[transport-udp]" in c or "[transport-udp]" in c.lower():
+                    transport_defined = True
+                    break
+        
+        # If no transport is defined, create a default one in pjsip.conf
+        pjsip_main = "/etc/asterisk/pjsip.conf"
+        if not transport_defined and os.path.exists(pjsip_main):
+            with open(pjsip_main, "a") as f:
+                f.write("\n\n; Added by VoicePilot to resolve missing UDP transport error\n[transport-udp]\ntype=transport\nprotocol=udp\nbind=0.0.0.0:5060\n")
+            logger.info("Added default [transport-udp] section to /etc/asterisk/pjsip.conf")
+            
+        # 2. Ensure includes exist
         for pjsip_path in pjsip_paths:
             if os.path.exists(pjsip_path):
                 with open(pjsip_path, "r") as f:
@@ -193,8 +213,18 @@ def ensure_includes():
                 with open(extensions_path, "a") as f:
                     f.write("\n#include extensions_trunks.conf\n")
                     logger.info("Added #include extensions_trunks.conf to /etc/asterisk/extensions.conf")
+                    
+        # 3. Ensure res_resolver_unbound.so is disabled in modules.conf to fix DNS issues
+        modules_path = "/etc/asterisk/modules.conf"
+        if os.path.exists(modules_path):
+            with open(modules_path, "r") as f:
+                modules_content = f.read()
+            if "res_resolver_unbound.so" not in modules_content:
+                with open(modules_path, "a") as f:
+                    f.write("\nnoload => res_resolver_unbound.so ; Added by VoicePilot to prevent Asterisk DNS async resolution errors\n")
+                logger.info("Added noload => res_resolver_unbound.so to /etc/asterisk/modules.conf")
     except Exception as e:
-        logger.error(f"Failed to ensure Asterisk config file includes: {e}")
+        logger.error(f"Failed to ensure Asterisk config file configuration: {e}")
 
 
 def deploy_asterisk_configs(db: Client) -> None:
@@ -253,6 +283,8 @@ def deploy_asterisk_configs(db: Client) -> None:
         # Reload Asterisk in order
         mismatch = False
         try:
+            # Unload unbound resolver first to ensure standard system resolver handles DNS queries
+            subprocess.run(["asterisk", "-rx", "module unload res_resolver_unbound.so"], capture_output=True, text=True, timeout=5)
             # 1. pjsip reload
             subprocess.run(["asterisk", "-rx", "pjsip reload"], capture_output=True, text=True, timeout=5)
             # 2. dialplan reload

@@ -76,7 +76,7 @@ class LocalAgentService:
     def get_capabilities(self) -> dict[str, Any]:
         available_models: list[str] = []
         if settings.openai_api_key:
-            available_models.extend(["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"])
+            available_models.extend(["gpt-4o-mini"])
         if settings.anthropic_api_key:
             available_models.extend(["claude-3-5-sonnet-latest"])
 

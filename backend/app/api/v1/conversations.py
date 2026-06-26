@@ -95,7 +95,7 @@ async def agent_ask(
     system_prompt = (agent.get("agent_system_prompt") or agent.get("system_prompt") or "You are a helpful voice assistant. Be concise.").strip()
     language = agent.get("language", "en-US")
     voice_id = agent.get("voice_id", "aura-asteria-en")
-    model = agent.get("model", "gpt-4-turbo")
+    model = agent.get("model", "gpt-4o-mini")
     temperature = float(agent.get("temperature", 0.7))
     kb_metadata = agent.get("kb_metadata") or {}
     tts_provider = kb_metadata.get("tts_provider") or "deepgram"

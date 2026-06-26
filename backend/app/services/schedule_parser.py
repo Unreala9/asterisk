@@ -58,7 +58,7 @@ class ScheduleParserService:
             response_text = await self.llm.generate(
                 system_prompt=system_prompt,
                 messages=[{"role": "user", "content": text}],
-                model="gpt-4-turbo",
+                model="gpt-4o-mini",
                 temperature=0.1, # Low temperature for consistent JSON
                 max_tokens=500
             )

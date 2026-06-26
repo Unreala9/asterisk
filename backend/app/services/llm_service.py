@@ -20,12 +20,13 @@ class LLMService:
         self,
         system_prompt: str,
         messages: List[Dict[str, str]],
-        model: str = "gpt-4-turbo",
+        model: str = "gpt-4o-mini",
         temperature: float = 0.7,
         max_tokens: int = 150,
     ) -> str:
         try:
             if model.startswith("gpt"):
+                model = "gpt-4o-mini"  # Force GPT-4o mini for OpenAI calls
                 if not self.openai_client:
                     raise ValueError("OpenAI API key not configured")
                 response = await self.openai_client.chat.completions.create(
@@ -67,6 +68,10 @@ class LLMService:
     ) -> AsyncGenerator[str, None]:
         if not self.openai_client:
             raise ValueError("OpenAI API key not configured")
+
+        if model.startswith("gpt"):
+            model = "gpt-4o-mini"  # Force GPT-4o mini for OpenAI calls
+
         if not model.startswith("gpt"):
             # Claude streaming not implemented — fall back to non-streaming
             full = await self.generate(system_prompt, messages, model, temperature, max_tokens)

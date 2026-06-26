@@ -3,7 +3,8 @@ import sys
 from supabase import create_client
 
 # Load from backend/.env
-env_path = r"c:\Users\shwet\OneDrive\Documents\GitHub\bot-dashboard\GAP-Voice-Pilot\backend\.env"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(current_dir, ".env")
 env_vars = {}
 with open(env_path, "r") as f:
     for line in f:

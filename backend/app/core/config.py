@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     local_agent_knowledge_base_path: Optional[str] = None
     public_base_url: Optional[str] = None
     
+    # Billing / Cost settings
+    usd_to_inr: float = 83.5
+    deepgram_stt_per_hour_usd: float = 0.72
+    openai_input_per_1m_usd: float = 0.50     # GPT-3.5 input token price per 1M (0.50 USD)
+    openai_output_per_1m_usd: float = 1.50    # GPT-3.5 output token price per 1M (1.50 USD)
+    sarvam_tts_per_10k_chars_inr: float = 1.0
+    credit_value_inr: float = 1.0
+    twilio_outbound_per_min_usd: float = 0.013
+    
     # Asterisk AudioSocket
     asterisk_audiosocket_enabled: bool = True
     asterisk_audiosocket_host: str = "127.0.0.1"
