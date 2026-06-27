@@ -18,6 +18,12 @@ class AsteriskConfigGenerator:
         transport = trunk.get("transport", "udp")
         username = trunk.get("username", "")
         
+        try:
+            port_val = int(sip_port) if sip_port else 5060
+        except ValueError:
+            port_val = 5060
+        port_suffix = f":{sip_port}" if port_val != 5060 else ""
+        
         # Get password, check if it's already decrypted/plain-text
         password = trunk.get("password", "") or trunk.get("password_decrypted", "")
         if mask_password and password:
@@ -74,7 +80,7 @@ class AsteriskConfigGenerator:
                 "",
                 f"[provider-{trunk_id}-aor]",
                 "type=aor",
-                f"contact=sip:{sip_proxy}:{sip_port}",
+                f"contact=sip:{sip_proxy}{port_suffix}",
                 "",
                 f"[provider-{trunk_id}]",
                 "type=endpoint",
@@ -95,8 +101,8 @@ class AsteriskConfigGenerator:
                 "type=registration",
                 f"transport={transport_name}",
                 f"outbound_auth=provider-{trunk_id}-auth",
-                f"client_uri=sip:{username}@{sip_proxy}:{sip_port}",
-                f"server_uri=sip:{sip_proxy}:{sip_port}",
+                f"client_uri=sip:{username}@{sip_proxy}{port_suffix}",
+                f"server_uri=sip:{sip_proxy}{port_suffix}",
                 f"contact_user={username}",
                 ""
             ])
