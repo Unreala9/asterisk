@@ -468,9 +468,8 @@ export function WorkflowSidebar({
                 onChange={(e) => onUpdateGlobalSettings({ ...globalSettings, globalModel: e.target.value })}
                 className="w-full text-[13px] px-3 py-2 border border-neutral-200 rounded-xl outline-none focus:border-black"
               >
-                <option value="gpt-4o">GPT-4o (Suggested / High Intelligence)</option>
+                <option value="gpt-4o-mini">GPT-4o Mini (Cost Effective / Fast)</option>
                 <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Nuanced Dialogue)</option>
-                <option value="gpt-4-turbo">GPT-4 Turbo (Low Latency)</option>
               </select>
             </div>
 

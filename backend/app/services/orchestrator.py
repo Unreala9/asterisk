@@ -98,7 +98,7 @@ class CallOrchestrator:
         response_text = await self.llm.generate(
             system_prompt=system_prompt,
             messages=context.messages[-10:], # Last 10 messages for context
-            model=context.agent.get("model", "gpt-4-turbo"),
+            model=context.agent.get("model", "gpt-4o-mini"),
             temperature=float(context.agent.get("temperature", 0.7))
         )
         
