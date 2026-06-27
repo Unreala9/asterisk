@@ -85,6 +85,7 @@ class AsteriskConfigGenerator:
                 f"outbound_auth=provider-{trunk_id}-auth",
                 f"aors=provider-{trunk_id}-aor",
                 f"from_user={username}",
+                f"from_domain={sip_proxy}",
                 "direct_media=no",
                 "force_rport=yes",
                 "rewrite_contact=yes",

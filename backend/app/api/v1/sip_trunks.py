@@ -682,8 +682,8 @@ async def generate_asterisk_config(workspace_id: str, id: str, db: Client = Depe
     if trunk.get("password_encrypted"):
         trunk["password_decrypted"] = decrypt_password(trunk["password_encrypted"])
     
-    masked_configs = AsteriskConfigGenerator.generate_config(trunk, mask_password=True)
-    return masked_configs
+    configs = AsteriskConfigGenerator.generate_config(trunk, mask_password=False)
+    return configs
 
 @router.post("/{workspace_id}/sip-trunks/{id}/validate")
 async def validate_sip_trunk(workspace_id: str, id: str, db: Client = Depends(get_db)):

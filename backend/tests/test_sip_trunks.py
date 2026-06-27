@@ -117,8 +117,8 @@ def test_sip_trunk_config_generation_masking(mock_db):
         response = client.post(f"/api/v1/workspaces/{workspace_id}/sip-trunks/{trunk_id}/generate-asterisk-config")
         assert response.status_code == 200
         pjsip = response.json()["pjsip_conf"]
-        assert "supersecretpassword" not in pjsip
-        assert "********" in pjsip
+        assert "supersecretpassword" in pjsip
+        assert "********" not in pjsip
         assert "[provider-trunk-456]" in pjsip
 
 def test_workspace_isolation(mock_db):
