@@ -26,6 +26,8 @@ import {
   Layers,
   Sparkles,
   Zap,
+  Play,
+  Pause,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { VoiceStreamClient, type LatencySummary } from "@/lib/voiceStream";
@@ -82,12 +84,31 @@ const SARVAM_VOICES = [
   { value: "arjun", label: "Arjun (Sarvam) — Male, Hindi" },
 ];
 
+const AVAILABLE_NAMES = [
+  "aayan", "aditya", "advait", "amit", "anand", "ashutosh", "dev", "gokul", 
+  "ishita", "kabir", "kavitha", "kavya", "manan", "mani", "mohit", "neha", 
+  "pooja", "priya", "rahul", "ratan", "rehan", "ritu", "rohan", "roopa", 
+  "rupali", "shreya", "shruti", "shubh", "simran", "soham", "suhani", "sumit", 
+  "sunny", "tanya", "tarun", "varun", "vijay"
+];
+
 const getVoiceLabel = (v: string) => {
-  const match = [...DEEPGRAM_VOICES, ...SARVAM_VOICES].find(item => item.value === v);
-  if (match) return match.label;
-  return v.startsWith("aura-")
-    ? `${v.replace("aura-", "").charAt(0).toUpperCase() + v.replace("aura-", "").slice(1)}`
-    : `${v.charAt(0).toUpperCase() + v.slice(1)}`;
+  if (v.startsWith("aura-")) {
+    const match = DEEPGRAM_VOICES.find(item => item.value === v);
+    if (match) return match.label;
+    return `${v.replace("aura-", "").charAt(0).toUpperCase() + v.replace("aura-", "").slice(1)}`;
+  }
+  
+  const nameLower = v.toLowerCase().trim();
+  const nameCapitalized = nameLower.charAt(0).toUpperCase() + nameLower.slice(1);
+  
+  const FEMALE_VOICES = [
+    "meera", "shreya", "ishita", "kavitha", "kavya", "neha", "pooja", 
+    "priya", "ritu", "roopa", "rupali", "shruti", "simran", "suhani", "tanya"
+  ];
+  
+  const gender = FEMALE_VOICES.includes(nameLower) ? "Female" : "Male";
+  return `${nameCapitalized} (Sarvam) — ${gender}, Hindi`;
 };
 
 function AgentPlaygroundPage() {
@@ -119,10 +140,13 @@ function AgentPlaygroundPage() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
 
+  const [playingPreviewVoice, setPlayingPreviewVoice] = useState<string | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const voiceClientRef = useRef<VoiceStreamClient | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -131,6 +155,10 @@ function AgentPlaygroundPage() {
     return () => {
       voiceClientRef.current?.disconnect();
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current.currentTime = 0;
+      }
     };
   }, []);
 
@@ -375,6 +403,80 @@ function AgentPlaygroundPage() {
     };
   }
 
+  const toggleVoicePreview = useCallback((voiceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (playingPreviewVoice === voiceId) {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current.currentTime = 0;
+      }
+      setPlayingPreviewVoice(null);
+      return;
+    }
+
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current.currentTime = 0;
+    }
+
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      currentAudioRef.current = null;
+    }
+
+    let rawVal = voiceId.toLowerCase().trim();
+    
+    // Explicitly handle fallbacks first
+    let mappedVoice = "";
+    if (rawVal.includes("meera")) {
+      mappedVoice = "shreya";
+    } else if (rawVal.includes("arjun")) {
+      mappedVoice = "shubh";
+    } else {
+      // Find if any of the available static files are inside the voiceId string
+      const foundName = AVAILABLE_NAMES.find(name => rawVal.includes(name));
+      if (foundName) {
+        mappedVoice = foundName;
+      } else {
+        // Fallback: strip non-alphanumeric chars and take the first word/token
+        const cleaned = rawVal.replace(/[^\w\s-]/g, "").replace(/-/g, " ");
+        const firstWord = cleaned.split(/\s+/)[0];
+        mappedVoice = firstWord || rawVal;
+      }
+    }
+
+    const audioPath = `/voices/${mappedVoice}.mp3`;
+    console.log("Attempting to play preview path:", audioPath, "for voiceId:", voiceId);
+
+    const audio = new Audio(audioPath);
+    previewAudioRef.current = audio;
+    setPlayingPreviewVoice(voiceId);
+
+    audio.play().catch((err) => {
+      console.error("Failed to play preview audio for path:", audioPath, err);
+      setPlayingPreviewVoice(null);
+    });
+
+    audio.onended = () => {
+      if (previewAudioRef.current === audio) {
+        setPlayingPreviewVoice(null);
+        previewAudioRef.current = null;
+      }
+    };
+  }, [playingPreviewVoice]);
+
+  const handleVoiceChange = (val: string) => {
+    setSelectedVoice(val);
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current.currentTime = 0;
+      setPlayingPreviewVoice(null);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-[1400px] space-y-3 px-3 py-2 md:px-5 md:py-3">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -434,8 +536,8 @@ function AgentPlaygroundPage() {
                 <Label className="font-mono text-[9px] uppercase tracking-widest text-black/50">
                   Vocal Persona
                 </Label>
-                <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-                  <SelectTrigger className="h-9 rounded-[10px] border-transparent bg-[#f7f7f5] px-4 text-[12px] font-[450] focus:ring-0">
+                <Select value={selectedVoice} onValueChange={handleVoiceChange}>
+                  <SelectTrigger className="h-9 rounded-[10px] border-transparent bg-[#f7f7f5] px-4 text-[12px] font-[450] focus:ring-0 [&_button]:hidden">
                     <SelectValue placeholder="Select Voice" />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg border-[#e6e6e6]">
@@ -459,8 +561,29 @@ function AgentPlaygroundPage() {
                             <SelectGroup>
                               <SelectLabel className="font-mono text-[9px] uppercase tracking-[0.15em] text-black/40 px-2.5 py-1">Sarvam AI Voices</SelectLabel>
                               {sarvamVoicesInConfig.map((v) => (
-                                <SelectItem key={v} value={v} className="text-[13px] pl-4">
-                                  {getVoiceLabel(v)}
+                                <SelectItem key={v} value={v} className="text-[13px] pl-4 pr-8 relative">
+                                  <div className="flex items-center gap-3 w-full">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => toggleVoicePreview(v, e)}
+                                      onPointerDown={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                      }}
+                                      className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-slate-100 transition-colors text-indigo-600 shrink-0"
+                                    >
+                                      {playingPreviewVoice === v ? (
+                                        <Pause className="h-3 w-3" />
+                                      ) : (
+                                        <Play className="h-3 w-3 fill-current" />
+                                      )}
+                                    </button>
+                                    <span className="truncate">{getVoiceLabel(v)}</span>
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectGroup>

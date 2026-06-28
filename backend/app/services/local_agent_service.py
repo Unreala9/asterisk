@@ -82,7 +82,15 @@ class LocalAgentService:
 
         voices = list(DEEPGRAM_VOICES)
         if settings.sarvam_api_key:
-            voices.extend(["shubh", "meera", "shreya", "manan", "ishita", "arjun"])
+            voices.extend([
+                "shubh", "meera", "shreya", "manan", "ishita", "arjun",
+                "aayan", "aditya", "advait", "amit", "anand", "ashutosh",
+                "dev", "gokul", "kabir", "kavitha", "kavya", "mani",
+                "mohit", "neha", "pooja", "priya", "rahul", "ratan",
+                "rehan", "ritu", "rohan", "roopa", "rupali", "shruti",
+                "simran", "soham", "suhani", "sumit", "sunny", "tanya",
+                "tarun", "varun", "vijay"
+            ])
 
         return {
             "stt_available": self.stt is not None,
