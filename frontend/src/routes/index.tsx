@@ -630,7 +630,7 @@ function HomePage() {
                   </div>
                   <div style={{ borderTop: tier.highlight ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.08)", margin: "20px 0" }} />
                   <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 10 }}>
-                    {tier.features.map((f, j) => (
+                    {tier.features.map((f: string, j: number) => (
                       <li key={j} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, fontWeight: 320 }}>
                         <CheckCircle2 size={15} strokeWidth={2} style={{ flexShrink: 0 }} />
                         {f}

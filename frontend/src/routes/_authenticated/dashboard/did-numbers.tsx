@@ -182,6 +182,26 @@ export function DidNumbersPage() {
     }
   }
 
+  async function handleDelete(didId: string) {
+    if (!workspaceId || !authHeaders) return
+    if (!confirm("Are you sure you want to delete this DID number?")) return
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/did-numbers/${didId}`, {
+        method: "DELETE",
+        headers: authHeaders
+      })
+      if (res.ok) {
+        toast.success("DID number deleted successfully")
+        await fetchData(workspaceId, authHeaders)
+      } else {
+        const err = await res.json()
+        toast.error(err.detail || "Failed to delete DID number")
+      }
+    } catch (e) {
+      toast.error("Failed to delete DID number")
+    }
+  }
+
   return (
     <div className="bg-white px-4 py-3 text-black md:px-5 md:py-4">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -288,6 +308,14 @@ export function DidNumbersPage() {
                           >
                             <Phone className="h-4 w-4" />
                             {did.status === 'active' ? 'Disable' : 'Enable'}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="gap-2 rounded-xl text-red-500 focus:text-red-600 focus:bg-red-50"
+                            onClick={() => handleDelete(did.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

@@ -25,7 +25,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import {
-  Plus, Shield, Info, Copy, Check, AlertTriangle, RefreshCw, Trash2, Eye, Server, Phone, CheckCircle2, XCircle
+  Plus, Shield, Info, Copy, Check, AlertTriangle, RefreshCw, Trash2, Eye, Server, Phone, CheckCircle2, XCircle, Edit, Globe
 } from 'lucide-react'
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
@@ -77,6 +77,21 @@ export function SIPTrunksPage() {
   const [validationResult, setValidationResult] = useState<any>(null)
   const [testResult, setTestResult] = useState<any>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  // DID management state
+  const [addDidOpen, setAddDidOpen] = useState(false)
+  const [addDidLoading, setAddDidLoading] = useState(false)
+  const [addDidForm, setAddDidForm] = useState({
+    phone_number: '',
+    country_code: 'IN',
+    label: '',
+    agent_id: 'none',
+    inbound_enabled: true,
+    outbound_enabled: false,
+    recording_enabled: false
+  })
+  const [editDidTarget, setEditDidTarget] = useState<any | null>(null)
+  const [editDidLoading, setEditDidLoading] = useState(false)
 
   const apiUrl = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "")
 
@@ -335,6 +350,116 @@ export function SIPTrunksPage() {
     setTimeout(() => setCopiedField(null), 2000)
   }
 
+  const handleAddDid = async () => {
+    if (!workspaceId || !authHeaders || !activeTrunk) return
+    if (!addDidForm.phone_number.trim()) {
+      toast.error("Phone number is required")
+      return
+    }
+    setAddDidLoading(true)
+    try {
+      const payload = {
+        phone_number: addDidForm.phone_number.trim(),
+        country_code: addDidForm.country_code,
+        label: addDidForm.label.trim() || null,
+        sip_trunk_provider_id: activeTrunk.id,
+        agent_id: addDidForm.agent_id === 'none' ? null : addDidForm.agent_id,
+        inbound_enabled: addDidForm.inbound_enabled,
+        outbound_enabled: addDidForm.outbound_enabled,
+        recording_enabled: addDidForm.recording_enabled
+      }
+      const res = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/did-numbers`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || "Failed to add DID number")
+      }
+      setAddDidOpen(false)
+      setAddDidForm({
+        phone_number: '',
+        country_code: 'IN',
+        label: '',
+        agent_id: 'none',
+        inbound_enabled: true,
+        outbound_enabled: false,
+        recording_enabled: false
+      })
+      
+      // reload DIDs
+      const didsRes = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/did-numbers`, { headers: authHeaders })
+      if (didsRes.ok) {
+        const allDids = await didsRes.json()
+        setTrunkDids(allDids.filter((d: any) => d.sip_trunk_provider_id === activeTrunk.id))
+      }
+      toast.success("DID number added successfully")
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setAddDidLoading(false)
+    }
+  }
+
+  const handleEditDid = async () => {
+    if (!workspaceId || !authHeaders || !editDidTarget || !activeTrunk) return
+    setEditDidLoading(true)
+    try {
+      const payload = {
+        label: editDidTarget.label?.trim() || null,
+        agent_id: editDidTarget.agent_id === 'none' || editDidTarget.agent_id === null ? null : editDidTarget.agent_id,
+      }
+      const res = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/did-numbers/${editDidTarget.id}`, {
+        method: "PATCH",
+        headers: authHeaders,
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || "Failed to update DID number")
+      }
+      setEditDidTarget(null)
+      
+      // reload DIDs
+      const didsRes = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/did-numbers`, { headers: authHeaders })
+      if (didsRes.ok) {
+        const allDids = await didsRes.json()
+        setTrunkDids(allDids.filter((d: any) => d.sip_trunk_provider_id === activeTrunk.id))
+      }
+      toast.success("DID number updated successfully")
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setEditDidLoading(false)
+    }
+  }
+
+  const handleDeleteDid = async (didId: string) => {
+    if (!workspaceId || !authHeaders || !activeTrunk) return
+    if (!confirm("Are you sure you want to delete this DID number?")) return
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/did-numbers/${didId}`, {
+        method: "DELETE",
+        headers: authHeaders
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || "Failed to delete DID number")
+      }
+      
+      // reload DIDs
+      const didsRes = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/did-numbers`, { headers: authHeaders })
+      if (didsRes.ok) {
+        const allDids = await didsRes.json()
+        setTrunkDids(allDids.filter((d: any) => d.sip_trunk_provider_id === activeTrunk.id))
+      }
+      toast.success("DID number deleted successfully")
+    } catch (err: any) {
+      toast.error(err.message)
+    }
+  }
+
   return (
     <div className="bg-white px-4 py-3 text-black md:px-5 md:py-4">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -494,8 +619,31 @@ export function SIPTrunksPage() {
                     </TabsContent>
 
                     <TabsContent value="dids" className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-xs font-mono text-neutral-400 uppercase">Configured DID Numbers</Label>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setAddDidForm({
+                              phone_number: '',
+                              country_code: 'IN',
+                              label: '',
+                              agent_id: 'none',
+                              inbound_enabled: true,
+                              outbound_enabled: false,
+                              recording_enabled: false
+                            });
+                            setAddDidOpen(true);
+                          }}
+                          className="h-8 rounded-full text-xs"
+                        >
+                          <Plus className="mr-1.5 h-3.5 w-3.5" />
+                          Add DID
+                        </Button>
+                      </div>
+
                       {trunkDids.length === 0 ? (
-                        <div className="text-center py-6 border border-dashed border-black/10 rounded-2xl">
+                        <div className="text-center py-8 border border-dashed border-black/10 rounded-2xl">
                           <Phone className="h-6 w-6 text-neutral-300 mx-auto mb-2" />
                           <p className="text-xs text-neutral-500">No active DID numbers map to this SIP Trunk yet.</p>
                         </div>
@@ -515,6 +663,31 @@ export function SIPTrunksPage() {
                                 ) : (
                                   <span className="text-[10px] font-mono text-neutral-300 uppercase tracking-wider">Unlinked</span>
                                 )}
+                                <div className="flex items-center gap-1.5">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setEditDidTarget({
+                                        id: d.id,
+                                        phone_number: d.phone_number,
+                                        label: d.label || '',
+                                        agent_id: d.agent_id || 'none'
+                                      });
+                                    }}
+                                    className="h-7 w-7 text-neutral-500 hover:text-black hover:bg-black/5 rounded-full"
+                                  >
+                                    <Edit className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteDid(d.id)}
+                                    className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -1164,6 +1337,130 @@ export function SIPTrunksPage() {
                   </Button>
                 )}
               </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add DID Dialog */}
+        <Dialog open={addDidOpen} onOpenChange={setAddDidOpen}>
+          <DialogContent className="max-w-md rounded-3xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-[450] tracking-tight">Add DID Number to {activeTrunk?.name}</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-mono uppercase tracking-widest text-[#999999]">Phone Number (E.164 format)</Label>
+                <Input
+                  placeholder="+919343418163"
+                  value={addDidForm.phone_number}
+                  onChange={(e) => setAddDidForm({ ...addDidForm, phone_number: e.target.value })}
+                  className="h-11 rounded-xl font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-mono uppercase tracking-widest text-[#999999]">Friendly Label</Label>
+                <Input
+                  placeholder="My Custom SIP Line"
+                  value={addDidForm.label}
+                  onChange={(e) => setAddDidForm({ ...addDidForm, label: e.target.value })}
+                  className="h-11 rounded-xl text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-mono uppercase tracking-widest text-[#999999]">Country Code</Label>
+                <Input
+                  placeholder="IN"
+                  value={addDidForm.country_code}
+                  onChange={(e) => setAddDidForm({ ...addDidForm, country_code: e.target.value })}
+                  className="h-11 rounded-xl font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-mono uppercase tracking-widest text-[#999999]">Map to AI Agent</Label>
+                <Select
+                  value={addDidForm.agent_id}
+                  onValueChange={(val) => setAddDidForm({ ...addDidForm, agent_id: val })}
+                >
+                  <SelectTrigger className="h-11 rounded-xl text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="none">— Unlinked (no routing) —</SelectItem>
+                    {agents.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter className="flex gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setAddDidOpen(false)}
+                className="rounded-full h-10 px-5 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddDid}
+                disabled={addDidLoading}
+                className="rounded-full h-10 px-5 text-xs bg-[#c5b0f4] text-black hover:bg-[#c5b0f4]/90"
+              >
+                {addDidLoading ? "Adding..." : "Add DID"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit DID Dialog */}
+        <Dialog open={!!editDidTarget} onOpenChange={(open) => !open && setEditDidTarget(null)}>
+          <DialogContent className="max-w-md rounded-3xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-[450] tracking-tight">Edit DID: {editDidTarget?.phone_number}</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-mono uppercase tracking-widest text-[#999999]">Friendly Label</Label>
+                <Input
+                  placeholder="My Custom SIP Line"
+                  value={editDidTarget?.label || ''}
+                  onChange={(e) => setEditDidTarget({ ...editDidTarget, label: e.target.value })}
+                  className="h-11 rounded-xl text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-mono uppercase tracking-widest text-[#999999]">Map to AI Agent</Label>
+                <Select
+                  value={editDidTarget?.agent_id || 'none'}
+                  onValueChange={(val) => setEditDidTarget({ ...editDidTarget, agent_id: val })}
+                >
+                  <SelectTrigger className="h-11 rounded-xl text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="none">— Unlinked (no routing) —</SelectItem>
+                    {agents.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter className="flex gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setEditDidTarget(null)}
+                className="rounded-full h-10 px-5 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleEditDid}
+                disabled={editDidLoading}
+                className="rounded-full h-10 px-5 text-xs bg-[#c5b0f4] text-black hover:bg-[#c5b0f4]/90"
+              >
+                {editDidLoading ? "Saving..." : "Save Changes"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

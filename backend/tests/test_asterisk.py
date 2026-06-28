@@ -32,7 +32,10 @@ def test_asterisk_webhook_secret_validation(mock_db):
         }
         
         # Mock DID lookup in DB
-        mock_db.table().select().eq().execute.return_value.data = [{
+        select_mock = mock_db.table.return_value.select.return_value
+        select_mock.in_.return_value = select_mock
+        select_mock.eq.return_value = select_mock
+        select_mock.execute.return_value.data = [{
             "id": "phone-123",
             "workspace_id": "ws-123",
             "agent_id": "agent-123"
@@ -58,7 +61,10 @@ def test_asterisk_webhook_number_lookup_and_registration(mock_db):
     }
 
     # Mock DID lookup: return mapping details
-    mock_db.table().select().eq().execute.return_value.data = [{
+    select_mock = mock_db.table.return_value.select.return_value
+    select_mock.in_.return_value = select_mock
+    select_mock.eq.return_value = select_mock
+    select_mock.execute.return_value.data = [{
         "id": "phone-123",
         "workspace_id": "ws-123",
         "agent_id": "agent-123"
@@ -83,15 +89,26 @@ def test_asterisk_outbound_placeholder(mock_db):
     response = client.post("/api/calls/asterisk/outbound", json={})
     assert response.status_code == 400
 
-    # Mock agent validation
-    mock_db.table().select().eq().eq().execute.return_value.data = [{
-        "id": "agent-123"
-    }]
+    # Mock agent validation, did_numbers, and sip_trunk_providers queries sequentially
+    def mock_table(table_name):
+        mock_query = MagicMock()
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.execute.return_value = mock_query
+        
+        if table_name == "agents":
+            mock_query.data = [{"id": "agent-123"}]
+        elif table_name == "did_numbers":
+            mock_query.data = [{"id": "phone-123", "sip_trunk_provider_id": "trunk-123"}]
+        elif table_name == "sip_trunk_providers":
+            mock_query.data = [{"id": "trunk-123"}]
+        elif table_name == "calls":
+            mock_query.data = [{"id": "call-123"}]
+        else:
+            mock_query.data = []
+        return mock_query
 
-    # Mock phone number lookup
-    mock_db.table().select().eq().execute.return_value.data = [{
-        "id": "phone-123"
-    }]
+    mock_db.table = mock_table
 
     payload = {
         "to_number": "+12345678",
@@ -100,10 +117,14 @@ def test_asterisk_outbound_placeholder(mock_db):
         "agent_id": "agent-123"
     }
 
-    response = client.post("/api/calls/asterisk/outbound", json=payload)
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    assert "call_uuid" in response.json()
+    with patch("subprocess.run") as mock_run:
+        # Mock successful local command execution
+        mock_run.return_value = MagicMock(returncode=0, stdout="Success", stderr="")
+        
+        response = client.post("/api/calls/asterisk/outbound", json=payload)
+        assert response.status_code == 200
+        assert response.json()["status"] == "calling"
+        assert "call_uuid" in response.json()
 
 def test_call_session_manager_singleton():
     manager1 = CallSessionManager()
@@ -155,6 +176,38 @@ async def test_call_session_manager_lifecycle():
     manager.cleanup_call(call_uuid)
     assert callback_called is True
     assert call_uuid not in manager.active_calls
+
+@pytest.mark.asyncio
+async def test_call_session_manager_db_recovery():
+    manager = CallSessionManager()
+    call_uuid = str(uuid.uuid4())
+    
+    # Ensure it's NOT in memory
+    manager.active_calls.pop(call_uuid, None)
+    
+    # Mock supabase client and table query
+    with patch("app.services.call_session_manager.get_supabase_client") as mock_client:
+        mock_db = MagicMock()
+        mock_client.return_value = mock_db
+        
+        # Mock database select response
+        mock_db.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [{
+            "call_uuid": call_uuid,
+            "caller_phone_number": "+1111",
+            "caller_id": "+1111",
+            "dialed_number": "+2222",
+            "workspace_id": "ws-1",
+            "agent_id": "ag-1",
+            "phone_number_id": "ph-1",
+            "status": "created"
+        }]
+        
+        # Get Context (should trigger database recovery lookup)
+        context = await manager.get_call_context(call_uuid)
+        assert context is not None
+        assert context["call_uuid"] == call_uuid
+        assert context["caller_id"] == "+1111"
+        assert context["dialed_number"] == "+2222"
 
 def test_audiosocket_packet_formatting():
     payload = b"hello"

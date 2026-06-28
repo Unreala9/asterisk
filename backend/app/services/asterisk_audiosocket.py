@@ -409,7 +409,7 @@ class AsteriskVoiceSession:
         model = self.config.get('model') or voice_cfg.OPENAI_VOICE_MODEL
 
         try:
-            llm_stream = await llm.generate_stream(
+            llm_stream = llm.generate_stream(
                 system_prompt=self._build_system_prompt(),
                 messages=compressed_history,
                 model=model,
@@ -611,7 +611,11 @@ class AsteriskAudioSocketServer:
         try:
             msg_type, payload = await read_packet(reader)
             try:
-                call_uuid = payload.decode('utf-8').strip()
+                import uuid
+                if len(payload) == 16:
+                    call_uuid = str(uuid.UUID(bytes=payload))
+                else:
+                    call_uuid = payload.decode('utf-8').strip()
             except Exception:
                 logger.error(f'[AudioSocket] Handshake payload decode failed: {payload}')
                 writer.close()

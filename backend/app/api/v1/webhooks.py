@@ -724,17 +724,31 @@ async def asterisk_inbound(request: Request, db: Client = Depends(get_db)):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Missing call_uuid")
 
-    # 3. Normalize dialed number
-    normalized_dialed = _normalize_phone(dialed_number)
+    # 3. Normalize dialed number and handle URL-decoded plus sign (interpreted as space)
+    search_variants = []
+    for raw_num in [dialed_number, _normalize_phone(dialed_number)]:
+        if not raw_num:
+            continue
+        cleaned = raw_num.strip()
+        # If it started with space, it was decoded from '+'
+        if raw_num.startswith(" "):
+            cleaned = "+" + cleaned
+        search_variants.append(cleaned)
+        
+        # Add numeric digits only, and prefixed with '+'
+        digits = "".join(c for c in cleaned if c.isdigit())
+        if digits:
+            search_variants.append(digits)
+            search_variants.append("+" + digits)
+
+    # De-duplicate
+    search_variants = list(set(search_variants))
+    logger.info(f"[Asterisk Webhook] Searching for phone number using variants: {search_variants}")
 
     # 4. Search in did_numbers table first
     did_result = await asyncio.to_thread(
-        db.table("did_numbers").select("id, workspace_id, agent_id").eq("phone_number", normalized_dialed).eq("status", "active").execute
+        db.table("did_numbers").select("id, workspace_id, agent_id").in_("phone_number", search_variants).eq("status", "active").execute
     )
-    if not did_result.data:
-        did_result = await asyncio.to_thread(
-            db.table("did_numbers").select("id, workspace_id, agent_id").eq("phone_number", dialed_number).eq("status", "active").execute
-        )
 
     if did_result.data and isinstance(did_result.data, list):
         phone_data = did_result.data[0]
@@ -745,16 +759,12 @@ async def asterisk_inbound(request: Request, db: Client = Depends(get_db)):
     else:
         # Fallback to phone_numbers table
         phone_result = await asyncio.to_thread(
-            db.table("phone_numbers").select("id, workspace_id, agent_id").eq("phone_number", normalized_dialed).execute
+            db.table("phone_numbers").select("id, workspace_id, agent_id").in_("phone_number", search_variants).execute
         )
-        if not phone_result.data:
-            phone_result = await asyncio.to_thread(
-                db.table("phone_numbers").select("id, workspace_id, agent_id").eq("phone_number", dialed_number).execute
-            )
 
         if not phone_result.data:
-            logger.error(f"[Asterisk Webhook] Phone number {dialed_number} (normalized: {normalized_dialed}) not found in did_numbers or phone_numbers")
-            return {"status": "error", "message": f"Phone number {dialed_number} not found"}
+            logger.error(f"[Asterisk Webhook] Phone number variants {search_variants} not found in did_numbers or phone_numbers")
+            return {"status": "error", "message": "Phone number not found"}
 
         phone_data = phone_result.data[0]
         workspace_id = phone_data.get("workspace_id")
@@ -769,7 +779,6 @@ async def asterisk_inbound(request: Request, db: Client = Depends(get_db)):
     # 5. Create call record asynchronously to respond in < 200ms
     async def _create_call_record():
         try:
-            # Generate a new unique UUID for the call's database primary key
             import uuid
             db_call_id = str(uuid.uuid4())
             insert_payload = {
@@ -778,13 +787,14 @@ async def asterisk_inbound(request: Request, db: Client = Depends(get_db)):
                 "twilio_call_sid": call_uuid,  # fallback for uniqueness
                 "workspace_id": workspace_id,
                 "agent_id": agent_id,
-                "caller_phone_number": caller_id,
-                "caller_id": caller_id,
+                "caller_phone_number": caller_id or "unknown",
+                "caller_id": caller_id or "unknown",
                 "dialed_number": dialed_number,
+                "provider": provider,
                 "direction": "inbound",
                 "status": "created",
-                "provider": provider,
-                "metadata": {"provider": provider}
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "metadata": {"provider": provider, "dialed_number": dialed_number}
             }
             if is_did:
                 insert_payload["did_number_id"] = phone_id
