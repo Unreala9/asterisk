@@ -45,8 +45,9 @@ export function useNotifications() {
     fetchNotifications();
 
     // Real-time subscription
+    const channelId = Math.random().toString(36).substring(7);
     const subscription = supabase
-      .channel("notifications_realtime")
+      .channel(`notifications_realtime_${channelId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications" },

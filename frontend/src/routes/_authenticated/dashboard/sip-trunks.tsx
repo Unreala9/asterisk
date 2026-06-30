@@ -25,16 +25,18 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import {
-  Plus, Shield, Info, Copy, Check, AlertTriangle, RefreshCw, Trash2, Eye, Server, Phone, CheckCircle2, XCircle, Edit, Globe
+  Plus, Shield, Info, Copy, Check, AlertTriangle, RefreshCw, Trash2, Eye, Server, Phone, CheckCircle2, XCircle, Edit, Globe, AudioLines
 } from 'lucide-react'
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
+import { useWorkspace } from "@/context/WorkspaceContext"
 
 export const Route = createFileRoute('/_authenticated/dashboard/sip-trunks')({
   component: SIPTrunksPage,
 })
 
 export function SIPTrunksPage() {
+  const { workspaceId: contextWsId, authHeaders: contextHeaders, loading: contextLoading } = useWorkspace()
   const [trunks, setTrunks] = useState<any[]>([])
   const [agents, setAgents] = useState<any[]>([])
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
@@ -107,31 +109,24 @@ export function SIPTrunksPage() {
   }, [apiUrl])
 
   useEffect(() => {
+    if (contextLoading) return;
+    if (!contextWsId || !contextHeaders) {
+      setLoading(false);
+      return;
+    }
+
+    setWorkspaceId(contextWsId);
+    setAuthHeaders(contextHeaders);
+
     async function init() {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          "ngrok-skip-browser-warning": "true",
-        }
-        setAuthHeaders(headers)
-        const setupRes = await fetch(`${apiUrl}/api/v1/workspaces/setup`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ user_id: session.user.id, email: session.user.email }),
-        })
-        const { workspace_id } = await setupRes.json()
-        setWorkspaceId(workspace_id)
-        
         // Fetch agents for routing select
-        const agentRes = await fetch(`${apiUrl}/api/v1/workspaces/${workspace_id}/agents`, { headers })
+        const agentRes = await fetch(`${apiUrl}/api/v1/workspaces/${contextWsId}/agents`, { headers: contextHeaders! })
         if (agentRes.ok) {
           setAgents(await agentRes.json())
         }
         
-        await fetchTrunks(workspace_id, headers)
+        await fetchTrunks(contextWsId, contextHeaders!)
       } catch (err) {
         console.error("Failed to load page data:", err)
       } finally {
@@ -139,7 +134,7 @@ export function SIPTrunksPage() {
       }
     }
     init()
-  }, [apiUrl, fetchTrunks])
+  }, [contextWsId, contextHeaders, contextLoading, apiUrl, fetchTrunks])
 
   // Fetch specific details for active trunk
   const loadTrunkDetails = async (trunk: any) => {
@@ -461,19 +456,20 @@ export function SIPTrunksPage() {
   }
 
   return (
-    <div className="bg-white px-4 py-3 text-black md:px-5 md:py-4">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-3 md:px-5 md:py-4">
+      <div className="space-y-8">
         
         {/* Header */}
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div className="space-y-3">
-            <div className="font-mono text-[13px] uppercase tracking-[0.03em] text-black">
-              / Telephony Settings
+            <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#999999]">
+              <AudioLines className="h-3.5 w-3.5" />
+              <span>Telephony Settings</span>
             </div>
-            <h1 className="text-[40px] font-[340] leading-[1.05] tracking-[-0.015em] md:text-[52px]">
+            <h1 className="text-4xl font-[340] tracking-[-0.03em] text-black md:text-5xl">
               SIP Trunks
             </h1>
-            <p className="max-w-[760px] text-[14px] font-[330] leading-[1.4] text-black opacity-70">
+            <p className="max-w-2xl text-[15px] font-[330] leading-relaxed text-black/60">
               Manage custom SIP trunks, register DID numbers, configure pjsip endpoints, and map inbound routes to your AI Agents.
             </p>
           </div>

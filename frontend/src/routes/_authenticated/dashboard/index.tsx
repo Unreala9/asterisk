@@ -14,7 +14,7 @@ function DashboardHome() {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-3 md:px-5 md:py-4">
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-black/50">
+        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#999999]">
           <LayoutDashboard className="h-3.5 w-3.5" />
           <span>System Overview</span>
         </div>

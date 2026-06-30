@@ -1,6 +1,6 @@
 # VoicePilot: AI-Powered Telephony & Voice Bot Platform (Asterisk Integration)
 
-VoicePilot is a state-of-the-art AI voice agent platform designed to handle inbound and outbound voice calls. By integrating a FastAPI-based AI pipeline with an open-source **Asterisk PBX** server using **AudioSocket (TCP)**, VoicePilot achieves real-time, low-latency, human-like voice conversations using Deepgram STT, OpenAI/Claude, and Sarvam/Deepgram TTS.
+VoicePilot is a production-grade AI voice agent platform designed to handle low-latency inbound and outbound voice calls. By integrating a FastAPI-based AI pipeline with an open-source **Asterisk PBX** server using **AudioSocket (TCP)**, VoicePilot achieves real-time, human-like voice conversations using Deepgram STT, OpenAI/Claude, and Sarvam/Deepgram TTS.
 
 ---
 
@@ -37,145 +37,344 @@ VoicePilot is a state-of-the-art AI voice agent platform designed to handle inbo
 
 ## 🛠️ Technology Stack
 
-*   **Frontend**: React, TypeScript, Vite, TailwindCSS, TanStack Router.
-*   **Backend**: Python, FastAPI, Uvicorn, Pytest.
-*   **Database**: Supabase (PostgreSQL) with Realtime subscriptions.
-*   **Telephony**: Asterisk PBX (PJSIP channel driver, AudioSocket application).
-*   **AI Services**: Deepgram (Live Streaming STT & TTS), Sarvam AI (Indian Language TTS), OpenAI / Anthropic (LLM Core).
+*   **Frontend**: React (Vite, TypeScript, TailwindCSS, TanStack Router)
+*   **Backend**: Python (FastAPI, Uvicorn, Asyncio, Pytest)
+*   **Database**: Supabase (PostgreSQL) with Realtime Webhooks
+*   **Telephony**: Asterisk PBX 20+ (PJSIP SIP channel driver, app_audiosocket)
+*   **AI Integrations**: Deepgram (Live Streaming STT & TTS), Sarvam AI (Indian Language TTS), OpenAI / Anthropic (LLM Core)
 
 ---
 
-## 🚀 Local Quickstart Guide
+## 🗄️ Database Tables (Supabase DDL SQL)
 
-### 1. Prerequisites
-*   Python 3.10+ installed.
-*   Node.js 18+ installed.
-*   An active Ngrok account.
-*   A remote Ubuntu VPS running Asterisk 20+.
+Run these SQL scripts in your Supabase SQL editor to create the required tables:
 
-### 2. Backend Setup
+```sql
+-- 1. Create sip_trunk_providers
+CREATE TABLE IF NOT EXISTS sip_trunk_providers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  provider_type TEXT NOT NULL CHECK (provider_type IN ('airtel', 'jio', 'tata', 'twilio', 'exotel', 'myoperator', 'knowlarity', 'custom')),
+  auth_type TEXT NOT NULL CHECK (auth_type IN ('ip_auth', 'username_password')),
+  sip_proxy TEXT NOT NULL,
+  sip_port INTEGER DEFAULT 5060,
+  transport TEXT DEFAULT 'udp' CHECK (transport IN ('udp', 'tcp', 'tls')),
+  username TEXT,
+  password_encrypted TEXT,
+  outbound_caller_id TEXT,
+  provider_ips JSONB,
+  allowed_codecs JSONB DEFAULT '["ulaw", "alaw"]'::jsonb,
+  rtp_ip TEXT,
+  max_concurrent_calls INTEGER DEFAULT 10,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'disabled', 'error')),
+  last_checked_at TIMESTAMPTZ,
+  last_error TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 2. Create did_numbers
+CREATE TABLE IF NOT EXISTS did_numbers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  sip_trunk_provider_id UUID REFERENCES sip_trunk_providers(id) ON DELETE SET NULL,
+  phone_number TEXT NOT NULL,
+  country_code TEXT NOT NULL,
+  label TEXT,
+  provider TEXT,
+  agent_id UUID,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'disabled', 'pending')),
+  inbound_enabled BOOLEAN DEFAULT true,
+  outbound_enabled BOOLEAN DEFAULT false,
+  recording_enabled BOOLEAN DEFAULT false,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(workspace_id, phone_number)
+);
+
+-- 3. Modify calls table for Asterisk support
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS call_uuid TEXT UNIQUE;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'twilio';
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS caller_id TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS dialed_number TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS duration_seconds INT DEFAULT 0;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS did_number_id UUID REFERENCES did_numbers(id) ON DELETE SET NULL;
+ALTER TABLE calls ALTER COLUMN phone_number_id DROP NOT NULL;
+```
+
+---
+
+## 📞 Asterisk PBX Server Prep & Configuration (VPS)
+
+### 1. Install Asterisk 20+ on Ubuntu
+On your Hostinger VPS, run the following to install Asterisk and standard modules:
+```bash
+sudo apt update
+sudo apt install asterisk asterisk-modules -y
+```
+
+### 2. Configure Dialplan (`/etc/asterisk/extensions.conf`)
+Open `/etc/asterisk/extensions.conf` and configure the incoming context to route calls directly to the AudioSocket server on port 9092:
+```ini
+[from-provider-default]
+exten => _.,1,NoOp(Inbound Call from ${CALLERID(num)})
+same => n,Answer()
+same => n,Set(CALL_UUID=${SHELL(uuidgen | tr -d '\n')})
+same => n,AudioSocket(${CALL_UUID},127.0.0.1:9092)
+same => n,Hangup()
+```
+Reload Asterisk config:
+```bash
+asterisk -rx "dialplan reload"
+```
+
+---
+
+## 💻 Part 1: Local Development Quickstart
+
+### 1. Backend Setup
 1. Navigate to the backend directory:
     ```bash
     cd backend
     ```
-2. Create a virtual environment and activate it:
+2. Create and activate a Python virtual environment:
     ```bash
     python -m venv venv
     # Windows PowerShell:
     .\venv\Scripts\Activate.ps1
-    # Bash:
+    # Linux/Mac Bash:
     source venv/bin/activate
     ```
-3. Install dependencies:
+3. Install the dependencies:
     ```bash
     pip install -r requirements.txt
     ```
-4. Configure your environment variables in `.env` (see **Environment Variables** section below).
-5. Start the FastAPI development server:
+4. Copy the environment template:
+    ```bash
+    cp .env.example .env
+    ```
+    Set your Supabase keys, Deepgram key, and OpenAI key.
+5. Launch the FastAPI backend:
     ```bash
     python -m app.main
     ```
 
-### 3. Frontend Setup
-1. Navigate to the frontend directory:
+### 2. Frontend Setup
+1. Open a new terminal tab and navigate to `frontend`:
     ```bash
-    cd ../frontend
+    cd frontend
     ```
-2. Install package dependencies:
+2. Install npm packages:
     ```bash
     npm install
     ```
-3. Copy or create `.env` configuring `VITE_API_URL` to point to your ngrok URL.
-4. Start the frontend developer console:
+3. Configure `VITE_API_URL` inside `frontend/.env` pointing to your local backend or ngrok URL.
+4. Launch the frontend development console:
     ```bash
     npm run dev
     ```
 
-### 4. Ngrok Tunneling Setup
-To allow the remote Asterisk VPS to send webhooks to your local machine, expose port 8000:
+### 3. Ngrok Webhook Tunnel Setup
+To receive inbound call events from the remote VPS, expose your local port 8000:
 ```bash
 ngrok http 8000
 ```
-Update your backend `.env` variables (`PUBLIC_BASE_URL`, `WS_STREAM_URL`) to match the generated ngrok domain.
+Update your backend `.env` variables (`PUBLIC_BASE_URL` and `WS_STREAM_URL`) to match the ngrok address.
+
+### 4. SSH Reverse Port Forwarding Tunnel (For Audio Streaming)
+Because the audio pipeline runs over **AudioSocket (TCP port 9092)**, your remote Asterisk VPS needs to stream audio to your laptop. Establish a reverse SSH tunnel:
+
+1. **VPS Configuration**: Enable tunnel forwarding in `/etc/ssh/sshd_config` by verifying:
+   ```bash
+   AllowTcpForwarding yes
+   GatewayPorts yes
+   ```
+   Restart SSH: `systemctl restart ssh`.
+2. **Local Laptop Connection**: Run the following command in a new terminal tab:
+   ```bash
+   ssh -N -R 9092:127.0.0.1:9092 -o ExitOnForwardFailure=yes -o ServerAliveInterval=60 root@72.60.202.148
+   ```
+   *Keep this tunnel connection alive while testing.*
 
 ---
 
-## 🔒 SSH Reverse Port Forwarding & VPS Settings
+## 🚀 Part 2: Production VPS Deployment
 
-Because the audio pipeline operates on **AudioSocket (TCP port 9092)**, Asterisk needs to send audio to your local machine. We accomplish this by establishing an SSH reverse tunnel from your local laptop to the remote VPS.
+In production, both Asterisk and your Python backend run on the Hostinger VPS. No ngrok tunnels, browser bypass warnings, or SSH tunnels are required.
 
-### 1. Enable Forwarding on your Hostinger VPS
-By default, VPS templates may block reverse port forwarding. Log into your VPS as `root` and edit `/etc/ssh/sshd_config`:
+### 1. Code Deployment
+Clone your repo and pull the code to `/root/voice/aura-voice-ai` on the VPS. Set up the production venv:
 ```bash
-# Uncomment or add these directives:
-AllowTcpForwarding yes
-GatewayPorts yes
-```
-Restart the SSH service:
-```bash
-systemctl restart ssh
+cd /root/voice/aura-voice-ai/backend
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### 2. Free Stuck Ports on the VPS
-If a previous SSH tunnel hung, kill the orphaned socket on the VPS:
-```bash
-fuser -k 9092/tcp
+### 2. Configure Backend Production Variables (`backend/.env`)
+Edit `/root/voice/aura-voice-ai/backend/.env` with these production values:
+```ini
+PUBLIC_BASE_URL=https://api.yourdomain.com
+WS_STREAM_URL=wss://api.yourdomain.com/ws/voice
+
+ASTERISK_AUDIOSOCKET_ENABLED=true
+ASTERISK_AUDIOSOCKET_HOST=127.0.0.1
+ASTERISK_AUDIOSOCKET_PORT=9092
+ASTERISK_SSH_HOST=127.0.0.1
+ASTERISK_SSH_USER=root
+
+API_HOST=127.0.0.1
+API_PORT=8000
 ```
 
-### 3. Open the SSH Tunnel (Run on your LOCAL Laptop)
-Start the background tunnel from your local computer:
+### 3. Run Backend under PM2 Process Monitor
+Start Uvicorn in the background using PM2:
 ```bash
-ssh -N -R 9092:127.0.0.1:9092 -o ExitOnForwardFailure=yes -o ServerAliveInterval=60 root@72.60.202.148
+pm2 start "venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000" --name "voice-backend"
+pm2 save
+pm2 startup
 ```
-*Leave this terminal window running in the background.*
+
+### 4. Open VPS Firewall Ports (UFW)
+Open necessary ports for webhooks, SIP communication, and audio:
+```bash
+sudo ufw allow 8000/tcp   # Webhooks/API
+sudo ufw allow 5060/udp   # SIP Signaling
+sudo ufw allow 10000:20000/udp  # RTP Audio Streams
+sudo ufw reload
+```
+
+### 5. Nginx Reverse Proxy with HTTPS & WebSockets
+Configure Nginx to reverse proxy API and WebSocket connections to port 8000, and serve the built React files directly.
+Add this config file under `/etc/nginx/sites-available/voicepilot`:
+
+```nginx
+# API & Webhooks Proxy
+server {
+    server_name api.yourdomain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# Frontend Dashboard Static Hosting
+server {
+    server_name dashboard.yourdomain.com;
+    root /root/voice/aura-voice-ai/frontend/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+Link the file, reload Nginx, and generate SSL certificates via Certbot:
+```bash
+sudo ln -s /etc/nginx/sites-available/voicepilot /etc/nginx/sites-enabled/
+sudo systemctl reload nginx
+sudo certbot --nginx -d api.yourdomain.com -d dashboard.yourdomain.com
+```
 
 ---
 
-## 📞 Outbound Call Origination
+## 📞 Outbound Dialing Formatting & Settings
 
-When you trigger an outbound call (either via the browser dashboard or the `/api/calls/asterisk/outbound` API), the backend handles credentials and formatting automatically.
+Outbound calling uses Asterisk's `channel originate` feature. To prevent call blocking:
 
-### Number Formatting
-*   **Zadarma Outbound Rules**: The destination number must omit the leading `+` symbol (e.g. `919343418163` instead of `+919343418163`). The backend automatically strips the `+` prefix prior to placing Asterisk calls.
-*   **Caller ID**: The originate command passes your verified Zadarma virtual number (`+18166536732`) as the authenticated caller identity.
-
-### Triggering Outbound Calls (Manual vs. Automatic)
-*   **Automatic Mode (Recommended)**: Set up passwordless key authentication between your laptop and VPS:
+### 1. Number Formatting
+*   **Carrier requirement (Zadarma)**: Numbers must omit the `+` sign (e.g. `919343418163` instead of `+919343418163`). The backend automatically strips the `+` prefix prior to placing Asterisk calls.
+*   **Caller ID Presentation**: You must pass your verified DID number (e.g. `+18166536732`) as the caller identity. The originate command includes this parameter:
     ```bash
-    ssh-keygen -t rsa -b 4096
-    ssh-copy-id root@72.60.202.148
+    channel originate PJSIP/919343418163@provider-64d25934-3abc-45a4-8cce-203d07acce62 application AudioSocket <UUID>,127.0.0.1:9092 "+18166536732"
     ```
-    Once keys are set up, clicking **"Test Call"** in the browser dashboard triggers the VPS automatically.
-*   **Manual Mode (Fallback)**: If keys are not set up, the backend console prints a command:
-    ```bash
-    asterisk -rx "channel originate PJSIP/919343418163@provider-64d25934-3abc-45a4-8cce-203d07acce62 application AudioSocket <UUID>,127.0.0.1:9092 \"+18166536732\""
-    ```
-    Copy the entire command and paste it inside your open remote VPS SSH session to trigger the call.
 
----
-
-## 🗄️ Database Tables (Supabase Schema)
-
-*   `agents`: Manages AI agent personas, language settings, and voice configurations.
-*   `did_numbers`: Mappings of virtual telephone numbers to specific agents.
-*   `sip_trunk_providers`: Registered SIP credentials, proxy hosts, and codecs for Asterisk.
-*   `calls`: Active call history logging metadata, direction (inbound/outbound), and duration.
-*   `call_messages`: Transcript records showing chat history between the caller and the bot.
-
----
-
-## 🧪 Running Automated Tests
-
-A suite of unit tests validates the database recovery, lifecycle management, and AudioSocket parsing. To execute tests locally:
+### 2. Automating Outbound Calls
+To allow clicking the dashboard's "Test Call" button to automatically trigger Asterisk on the remote VPS without manual copy-paste:
+Generate and add passwordless SSH keys between your laptop and VPS:
 ```bash
-cd backend
-.\venv\Scripts\python -m pytest tests/test_asterisk.py -v
+# On your local laptop:
+ssh-keygen -t rsa -b 4096
+ssh-copy-id root@72.60.202.148
 ```
+The backend will now execute `channel originate` over SSH automatically without prompting for credentials.
 
 ---
 
-## 💡 Troubleshooting
+## 🧪 Testing and Verification
 
-*   **Spinner Stuck on "LOADING NUMBERS..."**: Bypass the ngrok warning screen by opening `https://rewash-rematch-repost.ngrok-free.dev` in a new browser tab and clicking **"Visit Site"**.
-*   **Port Forwarding Fails**: Run `fuser -k 9092/tcp` on the VPS to clear active sockets.
-*   **Immediate "Answered" Status but No Ringing**: Verify your Zadarma account balance or ensure the Caller ID is whitelisted in your carrier panel.
+*   **Run Unit Tests**: Check local backend health by running pytest:
+    ```bash
+    cd backend
+    .\venv\Scripts\python -m pytest tests/test_asterisk.py -v
+    ```
+*   **Verify SIP Registrations**: Go inside the Asterisk VPS terminal and run:
+    ```bash
+    asterisk -rx "pjsip show registrations"
+    ```
+*   **Free Port Conflicts**: If port 9092 is bound by an orphaned SSH process, free it:
+    *   On Local Laptop: Close the terminal tab running the tunnel.
+    *   On VPS: Run `fuser -k 9092/tcp`.
+
+---
+
+## 📖 User Setup & Operational Workflow (Step-by-Step)
+
+Follow these steps to configure a complete voice bot from scratch using the web dashboard:
+
+### Step 1: Create an Account & Sign In
+1. Open your browser and navigate to the dashboard (e.g. `http://localhost:5173/` or `https://dashboard.yourdomain.com`).
+2. Click **"Sign Up"** (`/signup`) to create a new user account.
+3. Fill in your details (Email, Password, Name). A default workspace is automatically generated for you.
+4. Sign in (`/login`) with your credentials to access the primary admin panel.
+
+### Step 2: Create an AI Voice Agent
+1. In the left sidebar, navigate to **BUILD** -> **Agents** (`/dashboard/agents`).
+2. Click the **"Create Agent"** or **"+ Add Agent"** button.
+3. Fill in the agent details in the settings panel:
+   * **Name**: Set a recognizable label (e.g., `ekta2`).
+   * **Language**: Select your preferred language (e.g., `English` or `Hindi`).
+   * **Voice ID**: Select the voice actor model (e.g. Deepgram's `aura-asteria-en` or Sarvam's speakers).
+   * **Agent Persona (Prompt)**: Write the prompt defining the bot's behavior, instructions, and target goals (e.g., *"You are a helpful customer service representative for a food delivery app..."*).
+   * **Greetings**: Add the initial message the agent says when they answer the call (e.g., *"Hello! Welcome to Support. How can I help you today?"*).
+4. Save the agent configurations.
+
+### Step 3: Register a SIP Trunk Provider
+1. Navigate to **SETTINGS** -> **SIP Trunks** (`/dashboard/sip-trunks`).
+2. Click **"+ Add SIP Trunk"** to connect your telephony carrier.
+3. Enter your SIP carrier details:
+   * **Name**: Descriptive label (e.g., `Zadarma Trunk`).
+   * **SIP Proxy**: The registrar address (e.g. `sip.zadarma.com`).
+   * **Auth Type**:
+     * If using Zadarma or VoIP.ms, select **Username/Password**.
+     * If using Twilio Elastic SIP or Airtel/Tata, select **IP Auth** (and register your VPS IP `72.60.202.148` in the carrier's portal).
+   * **Credentials**: Enter your SIP username and password (for Userpass authentication).
+4. Click **"Save SIP Trunk"**. The backend will automatically reload Asterisk configurations to register with the carrier.
+
+### Step 4: Add & Link a Phone Number (DID)
+1. Navigate to **CHANNELS** -> **Phone Numbers** (`/dashboard/phone-numbers`).
+2. Click **"+ Add Phone Number"**.
+3. Configure the number properties:
+   * **Phone Number**: Enter your purchased virtual phone number (e.g. `+18166536732`).
+   * **Country Code**: Select the matching code (e.g. `+1` or `+91`).
+   * **SIP Trunk**: Choose the SIP Trunk provider you registered in Step 3.
+   * **Linked Agent**: Select the AI Agent (`ekta2`) you created in Step 2.
+4. Click **"Save Number"**. This links any inbound call targeting this virtual number directly to the agent's LLM context and voice persona.
+
+### Step 5: Test and Start Conversations
+* **Inbound Calls**: Dial your virtual phone number (`+18166536732`) from your mobile. Asterisk receives the call, queries the database, identifies agent `ekta2`, and starts the live AI conversation.
+* **Outbound Calls**: 
+  1. Navigate to **Agents** (`/dashboard/agents`).
+  2. Click **"Test Call"** on your agent's card.
+  3. Enter your phone number (e.g. `9343418163`) and click **"Start Test Call"**.
+  4. Paste and execute the printed command in your VPS terminal (or let the passwordless SSH execute it automatically). Your phone will ring, connecting you to your agent!
+

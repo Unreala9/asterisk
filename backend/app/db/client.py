@@ -51,7 +51,7 @@ def fetch_agent_with_context(db: Client, agent_id: str) -> dict:
         
     return agent
 
-def fetch_workspace_agents_with_context(db: Client, workspace_id: str) -> list:
+def fetch_workspace_agents_with_context(db: Client, workspace_id: str, include_context: bool = False) -> list:
     """
     Batch-fetches workspace agents and corresponding contexts using a single SQL
     in_ filter to avoid N+1 queries, returning the compiled list.
@@ -60,6 +60,13 @@ def fetch_workspace_agents_with_context(db: Client, workspace_id: str) -> list:
     if not agents_res.data:
         return []
     agents = agents_res.data
+    
+    if not include_context:
+        for agent in agents:
+            agent["agent_system_prompt"] = agent.get("system_prompt") or ""
+            agent["knowledge_base"] = ""
+        return agents
+        
     agent_ids = [a["id"] for a in agents]
     
     try:
@@ -88,6 +95,7 @@ def fetch_workspace_agents_with_context(db: Client, workspace_id: str) -> list:
         logging.getLogger(__name__).warning(f"Error batch-querying agent_contexts for workspace {workspace_id}: {e}")
         for agent in agents:
             agent["agent_system_prompt"] = agent.get("system_prompt") or ""
+            agent["knowledge_base"] = ""
         
     return agents
 

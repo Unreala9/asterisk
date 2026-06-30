@@ -38,15 +38,15 @@ function BatchCallPage() {
   const [campaigns] = useState<any[]>([])
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-3 py-2 md:px-5 md:py-3">
+    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-3 md:px-5 md:py-4">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div className="space-y-1.5">
+        <div className="space-y-3">
           <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#999999]">
             <PhoneForwarded className="h-3.5 w-3.5" />
             <span>Mass Distribution</span>
           </div>
-          <h1 className="text-[28px] md:text-4xl font-[340] tracking-[-0.03em] text-black">Batch Call</h1>
-          <p className="max-w-[760px] text-[13px] md:text-[14px] font-[320] leading-relaxed text-[#666666]">
+          <h1 className="text-4xl font-[340] tracking-[-0.03em] text-black md:text-5xl">Batch Call</h1>
+          <p className="max-w-2xl text-[15px] font-[330] leading-relaxed text-black/60">
             Automate outbound call campaigns at scale with high-concurrency voice engines.
           </p>
         </div>

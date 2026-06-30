@@ -16,9 +16,11 @@ import {
   Download,
   ChevronRight,
   PhoneCall,
-  Loader2
+  Loader2,
+  History
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 export const Route = createFileRoute("/_authenticated/dashboard/calls")({
   component: CallsPage,
@@ -46,6 +48,7 @@ function getSentimentBadge(sentiment: number | null) {
 }
 
 function CallsPage() {
+  const { workspaceId: contextWsId, authHeaders: contextHeaders, loading: contextLoading } = useWorkspace();
   const navigate = useNavigate();
   const [calls, setCalls] = useState<any[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -55,25 +58,18 @@ function CallsPage() {
   const apiUrl = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
   useEffect(() => {
+    if (contextLoading) return;
+    if (!contextWsId || !contextHeaders) {
+      setLoading(false);
+      return;
+    }
+
+    setWorkspaceId(contextWsId);
+    setAuthHeaders(contextHeaders);
+
     async function init() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          "ngrok-skip-browser-warning": "true",
-        };
-        setAuthHeaders(headers);
-        const setupRes = await fetch(`${apiUrl}/api/v1/workspaces/setup`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ user_id: session.user.id, email: session.user.email }),
-        });
-        const { workspace_id } = await setupRes.json();
-        setWorkspaceId(workspace_id);
-        
-        const callsRes = await fetch(`${apiUrl}/api/v1/workspaces/${workspace_id}/calls`, { headers });
+        const callsRes = await fetch(`${apiUrl}/api/v1/workspaces/${contextWsId}/calls`, { headers: contextHeaders! });
         const data = await callsRes.json();
         setCalls(data);
       } catch (err) {
@@ -83,21 +79,22 @@ function CallsPage() {
       }
     }
     init();
-  }, [apiUrl]);
+  }, [contextWsId, contextHeaders, contextLoading, apiUrl]);
 
   return (
-    <div className="bg-white px-4 py-3 text-black md:px-5 md:py-4">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-3 md:px-5 md:py-4">
+      <div className="space-y-8">
         
         {/* Header */}
         <div className="space-y-3">
-          <div className="font-mono text-[13px] uppercase tracking-[0.03em] text-black">
-            / Telemetric Records
+          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#999999]">
+            <History className="h-3.5 w-3.5" />
+            <span>Telemetric Records</span>
           </div>
-          <h1 className="text-[34px] font-[340] leading-[1.02] tracking-[-0.015em] md:text-[44px]">
+          <h1 className="text-4xl font-[340] tracking-[-0.03em] text-black md:text-5xl">
             Call History
           </h1>
-          <p className="max-w-[760px] text-[14px] font-[330] leading-[1.4] text-[#000000] opacity-70">
+          <p className="max-w-2xl text-[15px] font-[330] leading-relaxed text-black/60">
             Comprehensive audit log of all intelligence interactions and high-fidelity voice transmissions processed by the neural engine.
           </p>
         </div>

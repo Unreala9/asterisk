@@ -32,7 +32,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { VoiceStreamClient, type LatencySummary } from "@/lib/voiceStream";
 
-export const Route = createFileRoute("/_authenticated/dashboard/qa")({
+export const Route = createFileRoute("/_authenticated/admin/qa")({
   component: AgentPlaygroundPage,
   validateSearch: (search: Record<string, unknown>) => ({
     agentId: typeof search.agentId === "string" ? search.agentId : undefined,

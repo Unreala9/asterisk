@@ -36,12 +36,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
+import { useWorkspace } from "@/context/WorkspaceContext"
 
 export const Route = createFileRoute('/_authenticated/dashboard/phone-numbers')({
   component: PhoneNumbersPage,
 })
 
 function PhoneNumbersPage() {
+  const { workspaceId: contextWsId, authHeaders: contextHeaders, loading: contextLoading } = useWorkspace()
   const [phoneNumbers, setPhoneNumbers] = useState<any[]>([])
   const [agents, setAgents] = useState<any[]>([])
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
@@ -72,32 +74,26 @@ function PhoneNumbersPage() {
   }, [apiUrl])
 
   useEffect(() => {
+    if (contextLoading) return;
+    if (!contextWsId || !contextHeaders) {
+      setLoading(false);
+      return;
+    }
+
+    setWorkspaceId(contextWsId);
+    setAuthHeaders(contextHeaders);
+
     async function init() {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          "ngrok-skip-browser-warning": "true",
-        }
-        setAuthHeaders(headers)
-        const setupRes = await fetch(`${apiUrl}/api/v1/workspaces/setup`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ user_id: session.user.id, email: session.user.email }),
-        })
-        const { workspace_id } = await setupRes.json()
-        setWorkspaceId(workspace_id)
-        await fetchData(workspace_id, headers)
+        await fetchData(contextWsId!, contextHeaders!);
       } catch (err) {
-        console.error("Failed to load phone numbers:", err)
+        console.error("Failed to load phone numbers:", err);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
-    init()
-  }, [apiUrl, fetchData])
+    init();
+  }, [contextWsId, contextHeaders, contextLoading, fetchData]);
 
   async function handleAdd() {
     if (!workspaceId || !authHeaders) return
@@ -160,19 +156,20 @@ function PhoneNumbersPage() {
   }
 
   return (
-    <div className="bg-white px-4 py-3 text-black md:px-5 md:py-4">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-3 md:px-5 md:py-4">
+      <div className="space-y-8">
 
         {/* Header */}
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div className="space-y-3">
-            <div className="font-mono text-[13px] uppercase tracking-[0.03em] text-black">
-              / Infrastructure
+            <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#999999]">
+              <Phone className="h-3.5 w-3.5" />
+              <span>Infrastructure</span>
             </div>
-            <h1 className="text-[40px] font-[340] leading-[1.05] tracking-[-0.015em] md:text-[52px]">
+            <h1 className="text-4xl font-[340] tracking-[-0.03em] text-black md:text-5xl">
               Phone Numbers
             </h1>
-            <p className="max-w-[760px] text-[14px] font-[330] leading-[1.4] text-[#000000] opacity-70">
+            <p className="max-w-2xl text-[15px] font-[330] leading-relaxed text-black/60">
               Manage your telecommunications stack. Provision new local or toll-free numbers or link existing enterprise carrier trunks.
             </p>
           </div>
