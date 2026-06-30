@@ -144,7 +144,10 @@ def test_asterisk_webhook_did_resolution(mock_db):
     }
 
     # Mock DID search first (returns match)
-    mock_db.table().select().eq().eq().execute.return_value.data = [{
+    select_mock = mock_db.table.return_value.select.return_value
+    select_mock.in_.return_value = select_mock
+    select_mock.eq.return_value = select_mock
+    select_mock.execute.return_value.data = [{
         "id": "did-uuid-123",
         "workspace_id": "ws-uuid-abc",
         "agent_id": "agent-uuid-xyz"

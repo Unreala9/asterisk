@@ -15,6 +15,7 @@ import {
   Volume2,
   User,
   ClipboardList,
+  Bot,
 } from "lucide-react";
 
 
@@ -53,6 +54,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 export const Route = createFileRoute("/_authenticated/dashboard/agents/")({
   component: AgentsPage,
@@ -61,6 +63,7 @@ export const Route = createFileRoute("/_authenticated/dashboard/agents/")({
 const TERMINAL_STATUSES = ["completed", "failed", "no_answer", "canceled", "busy"];
 
 function AgentsPage() {
+  const { workspaceId: contextWsId, authHeaders: contextHeaders, loading: contextLoading } = useWorkspace();
   const [agents, setAgents] = useState<any[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [authHeaders, setAuthHeaders] = useState<Record<string, string> | null>(null);
@@ -298,24 +301,19 @@ function AgentsPage() {
   }, [apiUrl]);
 
   useEffect(() => {
+    if (contextLoading) return;
+    if (!contextWsId || !contextHeaders) {
+      setLoading(false);
+      return;
+    }
+
+    setWorkspaceId(contextWsId);
+    setAuthHeaders(contextHeaders);
+
     async function init() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          "ngrok-skip-browser-warning": "true",
-        };
-        setAuthHeaders(headers);
-        const setupRes = await fetch(`${apiUrl}/api/v1/workspaces/setup`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ user_id: session.user.id, email: session.user.email }),
-        });
-        const { workspace_id } = await setupRes.json();
-        setWorkspaceId(workspace_id);
-        const data = await fetchAgents(workspace_id, headers);
+        setError(null);
+        const data = await fetchAgents(contextWsId!, contextHeaders!);
         setAgents(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load agents");
@@ -324,7 +322,7 @@ function AgentsPage() {
       }
     }
     init();
-  }, [apiUrl, fetchAgents]);
+  }, [contextWsId, contextHeaders, contextLoading, fetchAgents]);
 
   const handleDelete = async (agentId: string) => {
     if (!workspaceId || !authHeaders) return;
@@ -373,19 +371,20 @@ function AgentsPage() {
   const agentToDelete = agents.find((a) => a.id === confirmDeleteId);
 
   return (
-    <div className="bg-white px-4 py-3 text-black md:px-5 md:py-4">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-3 md:px-5 md:py-4">
+      <div className="space-y-8">
         
         {/* Header Section */}
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div className="space-y-3">
-            <div className="font-mono text-[13px] uppercase tracking-[0.03em] text-black">
-              / Agent Directory
+            <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#999999]">
+              <Bot className="h-3.5 w-3.5" />
+              <span>Agent Directory</span>
             </div>
-            <h1 className="text-[34px] font-[340] leading-[1.02] tracking-[-0.015em] md:text-[44px]">
+            <h1 className="text-4xl font-[340] tracking-[-0.03em] text-black md:text-5xl">
               AI Agents
             </h1>
-            <p className="max-w-[760px] text-[14px] font-[330] leading-[1.4] text-[#000000] opacity-70">
+            <p className="max-w-2xl text-[15px] font-[330] leading-relaxed text-black/60">
               Your specialized voice personas, ready to represent your brand 24/7 with human-like intelligence.
             </p>
           </div>
@@ -411,22 +410,22 @@ function AgentsPage() {
             <p className="text-[14px] font-[320] opacity-60">{error}</p>
           </div>
         ) : (
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {agents.map((agent) => (
               <div
                 key={agent.id}
-                className="group flex flex-col gap-4 rounded-2xl border border-[#e6e6e6] bg-white p-5 transition-all duration-300 hover:border-black hover:shadow-sm"
+                className="group flex flex-col gap-3 rounded-xl border border-[#e6e6e6] bg-white p-4 transition-all duration-300 hover:border-black hover:shadow-sm"
               >
                 {/* Top Row: Identity */}
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#e6e6e6] bg-[#f7f7f5]">
-                    <AudioLines className="h-5 w-5 text-black" />
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e6e6e6] bg-[#f7f7f5]">
+                    <AudioLines className="h-4 w-4 text-black" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-[16px] font-bold leading-tight tracking-tight text-black truncate">{agent.name}</h3>
+                    <h3 className="text-[14px] font-bold leading-tight tracking-tight text-black truncate">{agent.name}</h3>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <div className="h-1.5 w-1.5 rounded-full bg-[#1ea64a] pulse-dot" />
-                      <span className="text-[9px] font-mono uppercase tracking-[0.14em] text-muted-foreground leading-none">
+                      <span className="text-[8.5px] font-mono uppercase tracking-[0.12em] text-muted-foreground leading-none">
                         Active • {agent.language}
                       </span>
                     </div>
@@ -434,27 +433,27 @@ function AgentsPage() {
                 </div>
 
                 {/* Stats Section */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between border-b border-[#f1f1f1] py-2.5">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between border-b border-[#f1f1f1] py-2">
                     <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-black/40">Total Calls</span>
-                    <span className="text-[16px] font-bold">{agent.total_calls ?? 0}</span>
+                    <span className="text-[14px] font-bold">{agent.total_calls ?? 0}</span>
                   </div>
-                  <div className="flex items-center justify-between border-b border-[#f1f1f1] py-2.5">
+                  <div className="flex items-center justify-between border-b border-[#f1f1f1] py-2">
                     <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-black/40">Voice Persona</span>
-                    <span className="text-[14px] font-medium capitalize text-black">{(agent.voice_id || "").split("-")[1] || agent.voice_id || "—"}</span>
+                    <span className="text-[13px] font-medium capitalize text-black">{(agent.voice_id || "").split("-")[1] || agent.voice_id || "—"}</span>
                   </div>
                 </div>
 
                 {/* Action Grid (2x2) */}
-                <div className="grid grid-cols-2 gap-2 mt-1">
+                <div className="grid grid-cols-2 gap-1.5 mt-1">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 rounded-xl border-[#e6e6e6] hover:bg-[#f7f7f5] hover:text-black text-xs font-semibold gap-1.5 justify-center w-full"
+                    className="h-8 rounded-lg border-[#e6e6e6] hover:bg-[#f7f7f5] hover:text-black text-[11px] font-semibold gap-1.5 justify-center w-full"
                     asChild
                   >
                     <Link to="/dashboard/agents/new" search={{ agentId: agent.id }}>
-                      <Settings className="h-3.5 w-3.5 text-black/60" />
+                      <Settings className="h-3 w-3 text-black/60" />
                       Configure
                     </Link>
                   </Button>
@@ -462,11 +461,11 @@ function AgentsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 rounded-xl border-[#e6e6e6] hover:bg-[#f7f7f5] hover:text-black text-xs font-semibold gap-1.5 justify-center w-full"
+                    className="h-8 rounded-lg border-[#e6e6e6] hover:bg-[#f7f7f5] hover:text-black text-[11px] font-semibold gap-1.5 justify-center w-full"
                     asChild
                   >
                     <Link to="/dashboard/qa" search={{ agentId: agent.id }}>
-                      <Search className="h-3.5 w-3.5 text-black/60" />
+                      <Search className="h-3 w-3 text-black/60" />
                       Playground
                     </Link>
                   </Button>
@@ -474,20 +473,20 @@ function AgentsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 rounded-xl border-[#e6e6e6] hover:bg-[#f7f7f5] hover:text-black text-xs font-semibold gap-1.5 justify-center w-full"
+                    className="h-8 rounded-lg border-[#e6e6e6] hover:bg-[#f7f7f5] hover:text-black text-[11px] font-semibold gap-1.5 justify-center w-full"
                     onClick={() => setTestCallAgent(agent)}
                   >
-                    <PhoneCall className="h-3.5 w-3.5 text-black/60" />
+                    <PhoneCall className="h-3 w-3 text-black/60" />
                     Test Call
                   </Button>
                   
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 rounded-xl border-red-100 text-red-500 hover:bg-red-50/50 hover:border-red-200 hover:text-red-600 text-xs font-semibold gap-1.5 justify-center w-full"
+                    className="h-8 rounded-lg border-red-100 text-red-500 hover:bg-red-50/50 hover:border-red-200 hover:text-red-600 text-[11px] font-semibold gap-1.5 justify-center w-full"
                     onClick={() => setConfirmDeleteId(agent.id)}
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                    <Trash2 className="h-3 w-3 text-red-500" />
                     Delete
                   </Button>
                 </div>
@@ -503,13 +502,13 @@ function AgentsPage() {
             <Link
               to="/dashboard/agents/new"
               search={{ agentId: undefined }}
-              className="group flex min-h-[260px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#e6e6e6] p-6 text-center transition-all duration-300 hover:border-black hover:bg-[#f7f7f5]"
+              className="group flex min-h-[220px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#e6e6e6] p-4 text-center transition-all duration-300 hover:border-black hover:bg-[#f7f7f5]"
             >
-              <div className="mb-4 flex h-8 w-8 items-center justify-center rounded-full border border-[#e6e6e6] bg-[#f7f7f5] text-black">
-                <Plus className="h-4 w-4" />
+              <div className="mb-3 flex h-7 w-7 items-center justify-center rounded-full border border-[#e6e6e6] bg-[#f7f7f5] text-black">
+                <Plus className="h-3.5 w-3.5" />
               </div>
-              <h4 className="mb-1 text-[16px] font-bold text-black">Deploy New Agent</h4>
-              <p className="max-w-[200px] text-[12px] font-[330] text-[#000000] opacity-50">Expand your fleet with a custom persona.</p>
+              <h4 className="mb-1 text-[14px] font-bold text-black">Deploy New Agent</h4>
+              <p className="max-w-[180px] text-[11px] font-[330] text-[#000000] opacity-50">Expand your fleet with a custom persona.</p>
             </Link>
           </div>
         )}

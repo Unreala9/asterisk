@@ -111,6 +111,107 @@ async def test_call(
     if not agent_result.data:
         raise HTTPException(status_code=404, detail="Agent not found")
 
+    # Check if the agent has a DID number with provider 'asterisk'
+    did_res = db.table("did_numbers").select("id, phone_number, provider, sip_trunk_provider_id").eq("agent_id", agent_id).eq("status", "active").execute()
+    
+    use_asterisk = False
+    from_number = None
+    phone_id = None
+    trunk_id = None
+    
+    if did_res.data:
+        for did in did_res.data:
+            if did.get("provider") == "asterisk":
+                use_asterisk = True
+                from_number = did.get("phone_number")
+                phone_id = did.get("id")
+                trunk_id = did.get("sip_trunk_provider_id")
+                break
+
+    import uuid
+    call_id = str(uuid.uuid4())
+
+    if use_asterisk:
+        if not trunk_id:
+            trunks_res = db.table("sip_trunk_providers").select("id").eq("workspace_id", workspace_id).execute()
+            if not trunks_res.data:
+                raise HTTPException(status_code=400, detail="No active SIP Trunk provider found for Asterisk test call")
+            trunk_id = trunks_res.data[0]["id"]
+            
+        # Register call in memory
+        from app.services.call_session_manager import call_session_manager
+        call_session_manager.register_inbound_asterisk_call(
+            call_uuid=call_id,
+            caller_id=from_number,
+            dialed_number=to_number,
+            workspace_id=str(workspace_id),
+            agent_id=str(agent_id),
+            phone_number_id=str(phone_id) if phone_id else ""
+        )
+        
+        # Insert call record in DB
+        try:
+            db.table("calls").insert({
+                "id": call_id,
+                "call_uuid": call_id,
+                "twilio_call_sid": call_id,
+                "workspace_id": workspace_id,
+                "agent_id": agent_id,
+                "did_number_id": phone_id,
+                "caller_phone_number": from_number,
+                "caller_id": from_number,
+                "dialed_number": to_number,
+                "direction": "outbound",
+                "status": "ringing",
+                "provider": "asterisk",
+                "metadata": {"provider": "asterisk", "is_test": True}
+            }).execute()
+            logger.info(f"[Asterisk Test Call] Registered outbound call record {call_id} in DB")
+        except Exception as db_err:
+            logger.error(f"[Asterisk Test Call] Failed to write call record to DB: {db_err}")
+            raise HTTPException(status_code=500, detail="Database write failure")
+            
+        # Originate via subprocess / SSH
+        import subprocess
+        import os
+        dial_number = to_number.lstrip('+')
+        originate_cmd = f"asterisk -rx \"channel originate PJSIP/{dial_number}@provider-{trunk_id} application AudioSocket {call_id},127.0.0.1:9092 \\\"{from_number}\\\"\""
+        cmd = ["asterisk", "-rx", f"channel originate PJSIP/{dial_number}@provider-{trunk_id} application AudioSocket {call_id},127.0.0.1:9092 \"{from_number}\""]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if res.returncode != 0:
+                raise FileNotFoundError()
+            logger.info("[Asterisk Test Call] Local originate succeeded")
+        except (FileNotFoundError, subprocess.SubprocessError):
+            ssh_host = os.getenv("ASTERISK_SSH_HOST") or "72.60.202.148"
+            ssh_user = os.getenv("ASTERISK_SSH_USER") or "root"
+            ssh_cmd = [
+                "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                f"{ssh_user}@{ssh_host}",
+                f"asterisk -rx \"channel originate PJSIP/{dial_number}@provider-{trunk_id} application AudioSocket {call_id},127.0.0.1:9092 \\\"{from_number}\\\"\""
+            ]
+            try:
+                ssh_res = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=12)
+                if ssh_res.returncode != 0:
+                    raise FileNotFoundError()
+                logger.info("[Asterisk Test Call] SSH originate succeeded")
+            except Exception as ssh_err:
+                border = "=" * 80
+                logger.info(f"\n{border}\n[MANUAL ACTION REQUIRED] SSH connection could not connect passwordlessly.\n"
+                            f"Please run the following command directly inside your VPS terminal:\n\n"
+                            f"  {originate_cmd}\n{border}\n")
+                return {
+                    "status": "calling", 
+                    "call_sid": call_id, 
+                    "to": to_number, 
+                    "call_id": call_id,
+                    "message": "Manual action required: Run the originate command in your remote VPS terminal.",
+                    "command": originate_cmd
+                }
+                
+        return {"status": "calling", "call_sid": call_id, "to": to_number, "call_id": call_id}
+
+    # Standard Twilio/Telnyx route fallback
     telephony = _get_telephony()
 
     # Determine the from_ number: env var → first number on account
@@ -125,10 +226,6 @@ async def test_call(
             status_code=503,
             detail=f"No {provider_name} phone number available. Add {provider_name.upper()}_PHONE_NUMBER to your .env."
         )
-
-    import uuid
-
-    call_id = str(uuid.uuid4())
 
     # Resolve the public base URL dynamically from request headers
     proto = request.headers.get("x-forwarded-proto") or request.url.scheme
@@ -199,8 +296,7 @@ asterisk_router = APIRouter()
 @asterisk_router.post("/api/calls/asterisk/outbound")
 async def asterisk_outbound_call(body: Dict[str, Any], db: Client = Depends(get_db)):
     """
-    Outbound SIP Trunk placeholder for future Asterisk originate/call setup.
-    Validates payload and creates a DB record before returning success.
+    Outbound SIP Trunk route for Asterisk. Originate a call via PJSIP/AudioSocket.
     """
     to_number = body.get("to_number", "").strip()
     from_number = body.get("from_number", "").strip()
@@ -218,15 +314,47 @@ async def asterisk_outbound_call(body: Dict[str, Any], db: Client = Depends(get_
     if not agent_result.data:
         raise HTTPException(status_code=404, detail="Agent not found in specified workspace")
 
-    # Find the corresponding phone number id if registered
-    phone_res = db.table("phone_numbers").select("id").eq("phone_number", from_number).execute()
-    phone_id = phone_res.data[0]["id"] if phone_res.data else None
+    # Find the corresponding phone number id / DID number id
+    did_res = db.table("did_numbers").select("id, sip_trunk_provider_id").eq("phone_number", from_number).execute()
+    phone_id = None
+    trunk_id = None
+    
+    if did_res.data:
+        phone_id = did_res.data[0]["id"]
+        trunk_id = did_res.data[0].get("sip_trunk_provider_id")
+    else:
+        # Fallback to phone_numbers table
+        phone_res = db.table("phone_numbers").select("id").eq("phone_number", from_number).execute()
+        if phone_res.data:
+            phone_id = phone_res.data[0]["id"]
+
+    if not trunk_id:
+        # Fallback: find any active asterisk trunk in the workspace
+        trunks_res = db.table("sip_trunk_providers").select("id").eq("workspace_id", workspace_id).execute()
+        if not trunks_res.data:
+            raise HTTPException(status_code=400, detail=f"No active SIP Trunk provider found in workspace {workspace_id}")
+        trunk_id = trunks_res.data[0]["id"]
 
     # Generate unique UUIDs for both DB id and calls table call_uuid
     import uuid
     db_call_id = str(uuid.uuid4())
     call_uuid = str(uuid.uuid4())
 
+    # Pre-register call details in CallSessionManager in-memory cache
+    from app.services.call_session_manager import call_session_manager
+    call_session_manager.register_inbound_asterisk_call(
+        call_uuid=call_uuid,
+        caller_id=from_number,
+        dialed_number=to_number,
+        workspace_id=str(workspace_id),
+        agent_id=str(agent_id),
+        phone_number_id=str(phone_id) if phone_id else ""
+    )
+
+    import os
+    from datetime import datetime, timezone
+    
+    # Insert call record
     try:
         db.table("calls").insert({
             "id": db_call_id,
@@ -234,19 +362,66 @@ async def asterisk_outbound_call(body: Dict[str, Any], db: Client = Depends(get_
             "twilio_call_sid": call_uuid,  # fallback for uniqueness
             "workspace_id": workspace_id,
             "agent_id": agent_id,
-            "phone_number_id": phone_id,
+            "phone_number_id": phone_id if not did_res.data else None,
+            "did_number_id": phone_id if did_res.data else None,
             "caller_phone_number": from_number,
             "caller_id": from_number,
             "dialed_number": to_number,
             "direction": "outbound",
-            "status": "created",
+            "status": "ringing",
             "provider": "asterisk",
-            "metadata": {"provider": "asterisk", "is_placeholder": True}
+            "metadata": {"provider": "asterisk"}
         }).execute()
         logger.info(f"[Asterisk Outbound] Registered outbound call record {call_uuid} in DB")
     except Exception as db_err:
         logger.error(f"[Asterisk Outbound] Failed to write call record to DB: {db_err}")
         raise HTTPException(status_code=500, detail="Database write failure")
 
-    return {"status": "success", "call_uuid": call_uuid}
+    # Originate the call
+    import subprocess
+    dial_number = to_number.lstrip('+')
+    originate_cmd = f"asterisk -rx \"channel originate PJSIP/{dial_number}@provider-{trunk_id} application AudioSocket {call_uuid},127.0.0.1:9092 \\\"{from_number}\\\"\""
+    cmd = ["asterisk", "-rx", f"channel originate PJSIP/{dial_number}@provider-{trunk_id} application AudioSocket {call_uuid},127.0.0.1:9092 \"{from_number}\""]
+    
+    try:
+        # 1. Try local execution (when running on VPS in production)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if res.returncode != 0:
+            logger.warning(f"[Asterisk Outbound] Local originate failed (code {res.returncode}): {res.stderr}")
+            raise FileNotFoundError() # trigger SSH fallback
+        logger.info("[Asterisk Outbound] Local originate succeeded")
+    except (FileNotFoundError, subprocess.SubprocessError):
+        # 2. Try remote SSH execution (fallback for local development)
+        ssh_host = os.getenv("ASTERISK_SSH_HOST") or "72.60.202.148"
+        ssh_user = os.getenv("ASTERISK_SSH_USER") or "root"
+        logger.info(f"[Asterisk Outbound] Attempting SSH fallback to {ssh_user}@{ssh_host}...")
+        
+        # BatchMode=yes prevents hanging on password prompts
+        ssh_cmd = [
+            "ssh", 
+            "-o", "BatchMode=yes", 
+            "-o", "ConnectTimeout=5", 
+            f"{ssh_user}@{ssh_host}", 
+            f"asterisk -rx \"channel originate PJSIP/{dial_number}@provider-{trunk_id} application AudioSocket {call_uuid},127.0.0.1:9092 \\\"{from_number}\\\"\""
+        ]
+        try:
+            ssh_res = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=12)
+            if ssh_res.returncode != 0:
+                raise FileNotFoundError()
+            logger.info("[Asterisk Outbound] SSH originate succeeded")
+        except Exception as ssh_err:
+            # Log manual action required
+            border = "=" * 80
+            logger.info(f"\n{border}\n[MANUAL ACTION REQUIRED] SSH connection could not connect passwordlessly.\n"
+                        f"Please run the following command directly inside your VPS terminal:\n\n"
+                        f"  {originate_cmd}\n{border}\n")
+            return {
+                "status": "calling", 
+                "call_uuid": call_uuid, 
+                "call_id": db_call_id,
+                "message": "Manual action required: Run the originate command in your remote VPS terminal.",
+                "command": originate_cmd
+            }
+
+    return {"status": "calling", "call_uuid": call_uuid, "call_id": db_call_id}
 

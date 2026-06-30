@@ -20,21 +20,20 @@ async def setup_workspace(data: Dict[str, Any], db: Client = Depends(get_db)):
         raise HTTPException(status_code=400, detail="user_id required")
 
     try:
-        # Upsert profile (creates if missing, no-ops if exists)
+        # Check if workspace already exists first to avoid slow DB writes on every setup call
+        logger.info(f"[setup] checking existing workspace for {user_id}")
+        existing = db.table("workspaces").select("id").eq("owner_id", user_id).limit(1).execute()
+        if existing.data:
+            logger.info(f"[setup] found existing workspace {existing.data[0]['id']}")
+            return {"workspace_id": existing.data[0]["id"]}
+
+        # If no workspace exists, upsert profile and create default workspace
         logger.info(f"[setup] upserting profile for {user_id}")
         db.table("profiles").upsert(
             {"id": user_id, "email": email},
             on_conflict="id"
         ).execute()
 
-        # Return existing workspace if already created
-        logger.info(f"[setup] checking workspace")
-        existing = db.table("workspaces").select("id").eq("owner_id", user_id).limit(1).execute()
-        if existing.data:
-            logger.info(f"[setup] found workspace {existing.data[0]['id']}")
-            return {"workspace_id": existing.data[0]["id"]}
-
-        # Create default workspace
         logger.info(f"[setup] creating workspace")
         workspace = db.table("workspaces").insert({
             "name": "Default Workspace",

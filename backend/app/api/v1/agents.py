@@ -142,9 +142,9 @@ async def create_agent(workspace_id: str, agent_data: Dict[str, Any], db: Client
 
 
 @router.get("/{workspace_id}/agents")
-async def list_agents(workspace_id: str, db: Client = Depends(get_db)):
+async def list_agents(workspace_id: str, include_context: bool = False, db: Client = Depends(get_db)):
     """List all agents in a workspace"""
-    return fetch_workspace_agents_with_context(db, workspace_id)
+    return fetch_workspace_agents_with_context(db, workspace_id, include_context)
 
 
 @router.get("/{workspace_id}/agents/{agent_id}")

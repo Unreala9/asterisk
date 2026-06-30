@@ -27,12 +27,14 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
+import { useWorkspace } from "@/context/WorkspaceContext"
 
 export const Route = createFileRoute('/_authenticated/dashboard/did-numbers')({
   component: DidNumbersPage,
 })
 
 export function DidNumbersPage() {
+  const { workspaceId: contextWsId, authHeaders: contextHeaders, loading: contextLoading } = useWorkspace()
   const [dids, setDids] = useState<any[]>([])
   const [trunks, setTrunks] = useState<any[]>([])
   const [agents, setAgents] = useState<any[]>([])
@@ -71,32 +73,26 @@ export function DidNumbersPage() {
   }, [apiUrl])
 
   useEffect(() => {
+    if (contextLoading) return;
+    if (!contextWsId || !contextHeaders) {
+      setLoading(false);
+      return;
+    }
+
+    setWorkspaceId(contextWsId);
+    setAuthHeaders(contextHeaders);
+
     async function init() {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          "ngrok-skip-browser-warning": "true",
-        }
-        setAuthHeaders(headers)
-        const setupRes = await fetch(`${apiUrl}/api/v1/workspaces/setup`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ user_id: session.user.id, email: session.user.email }),
-        })
-        const { workspace_id } = await setupRes.json()
-        setWorkspaceId(workspace_id)
-        await fetchData(workspace_id, headers)
+        await fetchData(contextWsId!, contextHeaders!);
       } catch (err) {
-        console.error("Failed to load DID numbers:", err)
+        console.error("Failed to load DID numbers:", err);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
-    init()
-  }, [apiUrl, fetchData])
+    init();
+  }, [contextWsId, contextHeaders, contextLoading, fetchData]);
 
   async function handleAdd() {
     if (!workspaceId || !authHeaders) return
@@ -182,20 +178,41 @@ export function DidNumbersPage() {
     }
   }
 
+  async function handleDelete(didId: string) {
+    if (!workspaceId || !authHeaders) return
+    if (!confirm("Are you sure you want to delete this DID number?")) return
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/did-numbers/${didId}`, {
+        method: "DELETE",
+        headers: authHeaders
+      })
+      if (res.ok) {
+        toast.success("DID number deleted successfully")
+        await fetchData(workspaceId, authHeaders)
+      } else {
+        const err = await res.json()
+        toast.error(err.detail || "Failed to delete DID number")
+      }
+    } catch (e) {
+      toast.error("Failed to delete DID number")
+    }
+  }
+
   return (
-    <div className="bg-white px-4 py-3 text-black md:px-5 md:py-4">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-3 md:px-5 md:py-4">
+      <div className="space-y-8">
 
         {/* Header */}
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div className="space-y-3">
-            <div className="font-mono text-[13px] uppercase tracking-[0.03em] text-black">
-              / Infrastructure
+            <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#999999]">
+              <Phone className="h-3.5 w-3.5" />
+              <span>Infrastructure</span>
             </div>
-            <h1 className="text-[40px] font-[340] leading-[1.05] tracking-[-0.015em] md:text-[52px]">
+            <h1 className="text-4xl font-[340] tracking-[-0.03em] text-black md:text-5xl">
               DID Numbers
             </h1>
-            <p className="max-w-[760px] text-[14px] font-[330] leading-[1.4] text-black opacity-70">
+            <p className="max-w-2xl text-[15px] font-[330] leading-relaxed text-black/60">
               List and manage direct inward dialing (DID) numbers from your Asterisk SIP trunks. Map phone numbers to specific AI agents.
             </p>
           </div>
@@ -288,6 +305,14 @@ export function DidNumbersPage() {
                           >
                             <Phone className="h-4 w-4" />
                             {did.status === 'active' ? 'Disable' : 'Enable'}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="gap-2 rounded-xl text-red-500 focus:text-red-600 focus:bg-red-50"
+                            onClick={() => handleDelete(did.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

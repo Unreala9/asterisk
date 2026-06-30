@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useLocation } from "@tanstack/react-router";
 import { AppSidebar } from "@/components/dashboard/AppSidebar";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -19,6 +19,17 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthenticatedLayout() {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
+  if (isAdminRoute) {
+    return (
+      <WorkspaceProvider>
+        <Outlet />
+      </WorkspaceProvider>
+    );
+  }
+
   return (
     <WorkspaceProvider>
       <SidebarProvider>

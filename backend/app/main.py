@@ -16,6 +16,7 @@ from app.api.v1 import (
     scheduled_tasks,
     voice_ws,
     sip_trunks,
+    admin,
 )
 
 
@@ -78,6 +79,7 @@ app.include_router(
 app.include_router(voice_ws.router, tags=["voice-ws"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth-legacy"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 
 

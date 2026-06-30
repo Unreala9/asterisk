@@ -121,7 +121,6 @@ export function AppSidebar() {
           url: "/dashboard/chat-history",
           icon: MessageSquare,
         },
-        { title: "Agent Playground", url: "/dashboard/qa", icon: Search },
         { title: "Alerting", url: "/dashboard/alerting", icon: Bell },
       ],
     },
@@ -134,12 +133,6 @@ export function AppSidebar() {
           icon: Receipt,
         },
         { title: "Settings", url: "/dashboard/settings", icon: Settings },
-      ],
-    },
-    {
-      label: "ACCOUNT",
-      items: [
-        { title: "Profile", url: "/dashboard/profile", icon: User },
       ],
     },
   ];
@@ -155,7 +148,7 @@ export function AppSidebar() {
           <span className="text-[17px] font-medium tracking-tight">VoicePilot</span>
         </Link>
       </SidebarHeader>
-      <SidebarContent className="px-2 py-2 gap-1 overflow-y-auto [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#d4d4d4] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#a3a3a3]">
+      <SidebarContent className="px-2 py-2 gap-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {navGroups.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel className="mb-1 px-2 font-mono text-[10px] uppercase tracking-widest text-[#999999]">

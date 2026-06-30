@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Book, Save, Loader2, Bot, FlaskConical, Plus, FileText, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 export const Route = createFileRoute(
   "/_authenticated/dashboard/knowledge-base",
@@ -17,6 +18,7 @@ const API_URL = (
 ).replace(/\/$/, "");
 
 function KnowledgeBasePage() {
+  const { workspaceId: contextWsId, authHeaders: contextHeaders, loading: contextLoading } = useWorkspace();
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [content, setContent] = useState("");
@@ -28,8 +30,27 @@ function KnowledgeBasePage() {
   const [authHeaders, setAuthHeaders] = useState<Record<string, string> | null>(null);
 
   useEffect(() => {
-    void init();
-  }, []);
+    if (contextLoading) return;
+    if (!contextWsId || !contextHeaders) {
+      setStatus("Not authenticated.");
+      return;
+    }
+    setWorkspaceId(contextWsId);
+    setAuthHeaders(contextHeaders);
+
+    async function load() {
+      try {
+        const agentsRes = await fetch(`${API_URL}/api/v1/workspaces/${contextWsId}/agents?include_context=true`, { headers: contextHeaders! });
+        if (!agentsRes.ok) throw new Error("Failed to fetch agents");
+        const data = await agentsRes.json();
+        setAgents(data);
+        setStatus(data.length === 0 ? "No agents found. Create one first." : "");
+      } catch (err) {
+        setStatus(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
+    }
+    load();
+  }, [contextWsId, contextHeaders, contextLoading]);
 
   useEffect(() => {
     if (!selectedAgentId || agents.length === 0) return;
@@ -37,38 +58,7 @@ function KnowledgeBasePage() {
     setContent(agent?.knowledge_base || "");
     setSaved(false);
     setSaveError(null);
-  }, [selectedAgentId]);
-
-  async function init() {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setStatus("Not authenticated."); return; }
-
-      const headers = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-        "ngrok-skip-browser-warning": "true",
-      };
-      setAuthHeaders(headers);
-
-      const setupRes = await fetch(`${API_URL}/api/v1/workspaces/setup`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ user_id: session.user.id, email: session.user.email }),
-      });
-      if (!setupRes.ok) throw new Error("Workspace setup failed");
-      const { workspace_id } = await setupRes.json();
-      setWorkspaceId(workspace_id);
-
-      const agentsRes = await fetch(`${API_URL}/api/v1/workspaces/${workspace_id}/agents`, { headers });
-      if (!agentsRes.ok) throw new Error("Failed to fetch agents");
-      const data = await agentsRes.json();
-      setAgents(data);
-      setStatus(data.length === 0 ? "No agents found. Create one first." : "");
-    } catch (err) {
-      setStatus(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
-    }
-  }
+  }, [selectedAgentId, agents]);
 
   async function saveKnowledgeBase() {
     if (!workspaceId || !authHeaders || !selectedAgentId) return;
@@ -109,18 +99,19 @@ function KnowledgeBasePage() {
   const selectedAgent = agents.find((a) => a.id === selectedAgentId);
 
   return (
-    <div className="bg-white px-4 py-3 text-black md:px-5 md:py-4">
-      <div className="mx-auto max-w-7xl space-y-12">
+    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-3 md:px-5 md:py-4">
+      <div className="space-y-12">
         
         {/* Header */}
         <div className="space-y-4">
-          <div className="font-mono text-[13px] uppercase tracking-[0.03em] text-black">
-            / Information Architecture
+          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#999999]">
+            <Book className="h-3.5 w-3.5" />
+            <span>Information Architecture</span>
           </div>
-          <h1 className="text-[40px] font-[340] leading-[1.05] tracking-[-0.015em] md:text-[52px]">
+          <h1 className="text-4xl font-[340] tracking-[-0.03em] text-black md:text-5xl">
             Knowledge Base
           </h1>
-          <p className="max-w-2xl text-[15px] font-[330] leading-[1.45] text-[#000000] opacity-70">
+          <p className="max-w-2xl text-[15px] font-[330] leading-relaxed text-black/60">
             Configure the neural context for each persona. Select an agent to update its specific behavioral parameters and data sets.
           </p>
         </div>
