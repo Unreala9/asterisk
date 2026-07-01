@@ -266,7 +266,7 @@ class AsteriskVoiceSession:
                     def _insert_user_msg(seq: int):
                         db = get_supabase_client()
                         db.table('call_messages').insert({
-                            'call_id': self.context['phone_number_id'],
+                            'call_id': self.call_uuid,
                             'role': 'user',
                             'content': transcript,
                             'sequence_number': seq,
@@ -392,7 +392,7 @@ class AsteriskVoiceSession:
         def _insert_assist_msg(seq: int):
             db = get_supabase_client()
             db.table('call_messages').insert({
-                'call_id': self.context['phone_number_id'],
+                'call_id': self.call_uuid,
                 'role': 'assistant',
                 'content': full_response,
                 'sequence_number': seq,
