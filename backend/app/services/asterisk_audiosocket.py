@@ -235,7 +235,7 @@ class AsteriskVoiceSession:
         for chunk in chunks:
             if self.writer.is_closing():
                 break
-            packet = format_packet(1, chunk)
+            packet = format_packet(16, chunk)
             self.writer.write(packet)
 
         try:
@@ -543,15 +543,15 @@ class AsteriskVoiceSession:
         try:
             while True:
                 msg_type, payload = await read_packet(self.reader)
-                if msg_type == 2:
-                    logger.info(f'[AudioSocket] Hangup packet received (0x02) for {self.call_uuid}')
+                if msg_type in (0, 2):
+                    logger.info(f'[AudioSocket] Hangup packet received ({msg_type}) for {self.call_uuid}')
                     break
-                elif msg_type == 3:
-                    logger.error(f'[AudioSocket] Error packet received (0x03) for {self.call_uuid}: {payload}')
+                elif msg_type in (255, 3):
+                    logger.error(f'[AudioSocket] Error packet received ({msg_type}) for {self.call_uuid}: {payload}')
                     break
                 elif msg_type == 4:
                     continue
-                elif msg_type == 1:
+                elif msg_type in (16, 1):
                     if len(payload) > 0:
                         try:
                             self.audio_queue.put_nowait(payload)
