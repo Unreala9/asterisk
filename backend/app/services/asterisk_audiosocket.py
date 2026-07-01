@@ -229,7 +229,7 @@ class AsteriskVoiceSession:
         if not audio_data:
             return
 
-        pcm_8k = ensure_pcm16_mono_8khz(audio_data)
+        pcm_8k = ensure_pcm16_mono_8khz(audio_data, input_sample_rate=8000)
         chunks = chunk_pcm_for_telephony(pcm_8k)
 
         for chunk in chunks:
@@ -343,7 +343,8 @@ class AsteriskVoiceSession:
                             speaker=speaker,
                             language='hi-IN',
                             output_audio_codec='pcm',
-                            pace=speed
+                            pace=speed,
+                            sample_rate=8000
                         )
                         await self.sarvam_tts_conn.connect()
 

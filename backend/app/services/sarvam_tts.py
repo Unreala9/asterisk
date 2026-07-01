@@ -258,7 +258,8 @@ class WarmSarvamConnection:
         language: str = "hi-IN",
         model: str = "bulbul:v3",
         output_audio_codec: str = "pcm",
-        pace: float = 1.0
+        pace: float = 1.0,
+        sample_rate: int = 16000
     ):
         self.api_key = api_key
         self.speaker = speaker
@@ -266,6 +267,7 @@ class WarmSarvamConnection:
         self.model = model
         self.output_audio_codec = output_audio_codec
         self.pace = pace
+        self.sample_rate = sample_rate
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
         self._lock = asyncio.Lock()
         self._connect_task: Optional[asyncio.Task] = None
@@ -302,7 +304,7 @@ class WarmSarvamConnection:
                         }
                     }
                     if codec == "linear16":
-                        config_msg["data"]["speech_sample_rate"] = 16000
+                        config_msg["data"]["speech_sample_rate"] = self.sample_rate
                     elif codec == "mulaw":
                         config_msg["data"]["speech_sample_rate"] = 8000
 
