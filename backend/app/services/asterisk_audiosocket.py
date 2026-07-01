@@ -375,6 +375,7 @@ class AsteriskVoiceSession:
                 await target_queue.put(None)
 
         def submit_chunk(text_chunk: str) -> None:
+            nonlocal task_index
             if not text_chunk.strip():
                 return
             queue = asyncio.Queue()
