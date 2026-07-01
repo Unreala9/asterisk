@@ -154,6 +154,7 @@ class AsteriskVoiceSession:
         if self.tts_conn:
             await self.tts_conn.cancel()
 
+        self.barge_in_event.clear()
         self._state = 'idle'
         self.speaking_started_at = 0.0
 
@@ -229,7 +230,7 @@ class AsteriskVoiceSession:
         if not audio_data:
             return
 
-        pcm_8k = ensure_pcm16_mono_8khz(audio_data, input_sample_rate=8000)
+        pcm_8k = ensure_pcm16_mono_8khz(audio_data)
         chunks = chunk_pcm_for_telephony(pcm_8k)
 
         for chunk in chunks:
@@ -248,6 +249,7 @@ class AsteriskVoiceSession:
         Processes the AI pipeline (LLM stream -> Buffer -> TTS -> AudioSocket TCP stream).
         """
         self.set_state('processing')
+        self.barge_in_event.clear()
 
         if not is_greeting and transcript.strip():
             user_seq = self.message_sequence + 1
@@ -343,8 +345,7 @@ class AsteriskVoiceSession:
                             speaker=speaker,
                             language='hi-IN',
                             output_audio_codec='pcm',
-                            pace=speed,
-                            sample_rate=8000
+                            pace=speed
                         )
                         await self.sarvam_tts_conn.connect()
 
