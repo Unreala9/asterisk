@@ -360,16 +360,22 @@ async def test_call(
             except Exception as http_err:
                 logger.warning(f"[Asterisk Test Call] VPS HTTP API failed: {http_err}")
 
-        # Strategy 2: Run asterisk locally (works if running ON the VPS)
+        # Strategy 2: Run asterisk locally (works if running ON the VPS, or via WSL on Windows)
         if not call_originated:
-            cmd = ["asterisk", "-rx", f"channel originate PJSIP/{dial_number}@provider-{trunk_id} application AudioSocket {call_id},127.0.0.1:9092 \"{from_number}\""]
+            import platform
+            if platform.system() == "Windows":
+                cmd = ["wsl", "-u", "root", "asterisk", "-rx", f"channel originate PJSIP/{dial_number}@provider-{trunk_id} application AudioSocket {call_id},127.0.0.1:9092 \"{from_number}\""]
+            else:
+                cmd = ["asterisk", "-rx", f"channel originate PJSIP/{dial_number}@provider-{trunk_id} application AudioSocket {call_id},127.0.0.1:9092 \"{from_number}\""]
             try:
                 res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
                 if res.returncode == 0:
                     call_originated = True
                     logger.info("[Asterisk Test Call] Local originate succeeded")
-            except (FileNotFoundError, subprocess.SubprocessError):
-                pass
+                else:
+                    logger.warning(f"[Asterisk Test Call] Local/WSL originate failed: {res.stderr}")
+            except (FileNotFoundError, subprocess.SubprocessError) as err:
+                logger.warning(f"[Asterisk Test Call] Local/WSL originate execution failed: {err}")
  
         # Strategy 3: SSH into VPS and run the command
         if not call_originated:
